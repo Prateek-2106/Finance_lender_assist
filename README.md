@@ -42,3 +42,12 @@ curl.exe -s joes-plumbing.lvh.me:3000/api/leads -H "authorization: Bearer <apiKe
 | `src/webhooks` | Twilio signature verification and TwiML |
 | `src/services`, `src/workflow` | Estimate, invoice and receipt workflow |
 | `tests` | Vitest suites; `tests/repos/contract.ts` runs against every storage backend |
+
+## Simulate an inbound SMS
+
+Sends the server exactly what Twilio would, signed with your token, so the full webhook path runs without a phone.
+
+```powershell
+$env:TWILIO_AUTH_TOKEN = "dev-token"   # same value in the server's window
+npm run sms:simulate -- <tenantId> "Need a quote for a leaky water heater" 716-555-0123
+```
