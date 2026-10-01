@@ -51,3 +51,15 @@ Sends the server exactly what Twilio would, signed with your token, so the full 
 $env:TWILIO_AUTH_TOKEN = "dev-token"   # same value in the server's window
 npm run sms:simulate -- <tenantId> "Need a quote for a leaky water heater" 716-555-0123
 ```
+
+## Estimate → invoice → receipt
+
+```powershell
+$k = @{ Authorization = "Bearer $($t.apiKey)" }; $base = "http://$($t.tenant.subdomain).lvh.me:3000/api"
+$items = '{"lineItems":[{"description":"Water heater flush","quantity":1,"unitPriceCents":12900},{"description":"Labor","quantity":2,"unitPriceCents":9500}]}'
+$e = (Invoke-RestMethod -Method Post "$base/estimates" -Headers $k -ContentType "application/json" -Body $items).estimate
+"sent","accepted" | % { Invoke-RestMethod -Method Post "$base/estimates/$($e.id)/transition" -Headers $k -ContentType "application/json" -Body "{`"to`":`"$_`"}" | Out-Null }
+$inv = (Invoke-RestMethod -Method Post "$base/estimates/$($e.id)/invoice" -Headers $k).invoice
+Invoke-WebRequest "$base/invoices/$($inv.id)/pdf" -Headers $k -OutFile invoice.pdf; start invoice.pdf
+(Invoke-RestMethod -Method Post "$base/invoices/$($inv.id)/pay" -Headers $k).receipt
+```

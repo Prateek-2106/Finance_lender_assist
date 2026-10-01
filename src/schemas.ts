@@ -92,3 +92,17 @@ export function parseOrThrow<S extends z.ZodType>(schema: S, data: unknown): z.o
   }
   return r.data;
 }
+
+export const EstimateCreateSchema = z.object({
+  leadId: z.string().min(1).optional(),
+  lineItems: z.array(LineItemSchema).max(100),
+  notes: z.string().trim().max(2000).optional(),
+});
+
+export const EstimatePatchSchema = z.object({
+  lineItems: z.array(LineItemSchema).max(100),
+});
+
+export const EstimateTransitionSchema = z.object({
+  to: z.enum(["draft", "sent", "accepted", "declined", "invoiced", "needs_review"]),
+});

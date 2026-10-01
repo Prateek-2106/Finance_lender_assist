@@ -85,7 +85,8 @@ export interface Invoice {
   tenantId: Id;
   estimateId: Id;
   number: string; // per-tenant sequence: "INV-0001"
-  lineItems: LineItem[];
+  lineItems: LineItem[]; // snapshot of the estimate at conversion
+  taxRateBps: number; // snapshot too: later tax changes never alter an issued invoice
   totals: Totals;
   status: InvoiceStatus;
   paidAt?: Date;

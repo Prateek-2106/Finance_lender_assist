@@ -52,6 +52,7 @@ export async function convertToInvoice(repos: Repos, tenantId: Id, estimateId: I
     estimateId,
     number: await repos.invoices.nextNumber(tenantId),
     lineItems: structuredClone(e.lineItems),
+    taxRateBps: e.taxRateBps,
     totals: computeTotals(e.lineItems, e.taxRateBps),
     status: "open",
   });

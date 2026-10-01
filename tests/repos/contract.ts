@@ -103,6 +103,7 @@ export function repoContract(name: string, makeRepos: () => Promise<Repos>) {
           estimateId: "e1",
           number: "INV-0001",
           lineItems: [],
+          taxRateBps: 0,
           totals: { subtotalCents: 0, taxCents: 0, totalCents: 0 },
           status: "open",
         });
