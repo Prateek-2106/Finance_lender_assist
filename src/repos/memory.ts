@@ -1,6 +1,6 @@
 // Reference implementation of the Repos contract, used by most tests.
 import { randomUUID } from "node:crypto";
-import type { Estimate, Id, Invoice, Lead, Tenant } from "../domain";
+import type { BankTransaction, Estimate, FundingApplication, Id, Invoice, Lead, Tenant } from "../domain";
 import { ConflictError, NotFoundError } from "../errors";
 import type { Repos } from "./types";
 
@@ -12,6 +12,8 @@ export function createMemoryRepos(): Repos {
   const estimates = new Map<Id, Estimate>();
   const invoices = new Map<Id, Invoice>();
   const counters = new Map<Id, number>();
+  const applications = new Map<Id, FundingApplication>();
+  const txns: BankTransaction[] = [];
 
   const hostTaken = (hostname: string | undefined, exceptId?: Id) =>
     !!hostname && [...tenants.values()].some((t) => t.id !== exceptId && t.customDomain?.hostname === hostname);
@@ -110,6 +112,46 @@ export function createMemoryRepos(): Repos {
         const n = (counters.get(tenantId) ?? 0) + 1;
         counters.set(tenantId, n);
         return `INV-${String(n).padStart(4, "0")}`;
+      },
+    },
+    applications: {
+      async create(input) {
+        const a: FundingApplication = { ...clone(input), id: randomUUID(), createdAt: new Date() };
+        applications.set(a.id, a);
+        return clone(a);
+      },
+      async findById(tenantId, id) {
+        const a = applications.get(id);
+        return a && a.tenantId === tenantId ? clone(a) : null;
+      },
+      async update(tenantId, id, patch) {
+        const a = applications.get(id);
+        if (!a || a.tenantId !== tenantId) throw new NotFoundError("Application not found");
+        const next = { ...a, ...clone(patch) };
+        applications.set(id, next);
+        return clone(next);
+      },
+    },
+    transactions: {
+      async insertMany(lines) {
+        let inserted = 0;
+        let duplicates = 0;
+        for (const l of lines) {
+          if (txns.some((t) => t.applicationId === l.applicationId && t.fingerprint === l.fingerprint)) {
+            duplicates++;
+            continue;
+          }
+          txns.push({ ...clone(l), id: randomUUID(), createdAt: new Date() });
+          inserted++;
+        }
+        return { inserted, duplicates };
+      },
+      async listByApplication(tenantId, applicationId, opts = {}) {
+        return txns
+          .filter((t) => t.tenantId === tenantId && t.applicationId === applicationId)
+          .filter((t) => !opts.category || t.category === opts.category)
+          .sort((x, y) => x.date.localeCompare(y.date)) // stable: same-day lines keep statement order
+          .map(clone);
       },
     },
   };

@@ -1,5 +1,5 @@
 import { MongoServerError, ObjectId, type Db } from "mongodb";
-import type { Estimate, Invoice, Lead, Tenant } from "../domain";
+import type { BankTransaction, Estimate, FundingApplication, Invoice, Lead, Tenant } from "../domain";
 import { ConflictError, NotFoundError } from "../errors";
 import type { Repos } from "./types";
 
@@ -27,6 +27,8 @@ export async function createMongoRepos(db: Db): Promise<Repos> {
   const estimates = db.collection<Doc<Estimate>>("estimates");
   const invoices = db.collection<Doc<Invoice>>("invoices");
   const counters = db.collection<{ _id: string; seq: number }>("counters");
+  const applications = db.collection<Doc<FundingApplication>>("applications");
+  const txns = db.collection<Doc<BankTransaction>>("transactions");
 
   await Promise.all([
     tenants.createIndex({ subdomain: 1 }, { unique: true }),
@@ -38,6 +40,9 @@ export async function createMongoRepos(db: Db): Promise<Repos> {
     estimates.createIndex({ tenantId: 1, _id: 1 }),
     invoices.createIndex({ tenantId: 1, estimateId: 1 }, { unique: true }),
     invoices.createIndex({ tenantId: 1, number: 1 }, { unique: true }),
+    applications.createIndex({ tenantId: 1, _id: 1 }),
+    txns.createIndex({ applicationId: 1, fingerprint: 1 }, { unique: true }),
+    txns.createIndex({ tenantId: 1, applicationId: 1, date: 1, _id: 1 }),
   ]);
 
   return {
@@ -122,6 +127,45 @@ export async function createMongoRepos(db: Db): Promise<Repos> {
           { upsert: true, returnDocument: "after" },
         );
         return `INV-${String(c!.seq).padStart(4, "0")}`;
+      },
+    },
+    applications: {
+      async create(input) {
+        const a: FundingApplication = { ...input, id: newId(), createdAt: new Date() };
+        await applications.insertOne(toDoc(a));
+        return a;
+      },
+      async findById(tenantId, id) {
+        return fromDoc(await applications.findOne({ _id: id, tenantId }));
+      },
+      async update(tenantId, id, patch) {
+        const d = await applications.findOneAndUpdate({ _id: id, tenantId }, { $set: patch }, { returnDocument: "after" });
+        if (!d) throw new NotFoundError("Application not found");
+        return fromDoc(d)!;
+      },
+    },
+    transactions: {
+      async insertMany(lines) {
+        if (lines.length === 0) return { inserted: 0, duplicates: 0 };
+        const now = new Date();
+        // Upsert keyed on (applicationId, fingerprint): existing lines are left untouched.
+        const r = await txns.bulkWrite(
+          lines.map((l) => ({
+            updateOne: {
+              filter: { applicationId: l.applicationId, fingerprint: l.fingerprint },
+              update: { $setOnInsert: { _id: newId(), ...l, createdAt: now } },
+              upsert: true,
+            },
+          })),
+          { ordered: false },
+        );
+        return { inserted: r.upsertedCount, duplicates: lines.length - r.upsertedCount };
+      },
+      async listByApplication(tenantId, applicationId, opts = {}) {
+        const q: Record<string, unknown> = { tenantId, applicationId };
+        if (opts.category) q.category = opts.category;
+        const docs = await txns.find(q).sort({ date: 1, _id: 1 }).toArray();
+        return docs.map((d) => fromDoc(d)!);
       },
     },
   };

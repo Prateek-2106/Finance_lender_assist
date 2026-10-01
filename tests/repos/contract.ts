@@ -113,5 +113,54 @@ export function repoContract(name: string, makeRepos: () => Promise<Repos>) {
         expect(paid.paidAt).toBeInstanceOf(Date);
       });
     });
+
+    describe("applications and transactions", () => {
+      const app = (tenantId: string) => ({
+        tenantId,
+        industry: "restaurant",
+        monthsInBusiness: 36,
+        statedMonthlyRevenueCents: 4_500_000,
+        amountRequestedCents: 3_000_000,
+        useOfFunds: "equipment",
+        status: "draft" as const,
+      });
+      const line = (applicationId: string, fingerprint: string, date: string) => ({
+        tenantId: "t1",
+        applicationId,
+        date,
+        description: "SQUARE DEP",
+        amountCents: 1000,
+        category: "revenue" as const,
+        rule: "credit.default",
+        fingerprint,
+      });
+
+      it("applications are tenant-scoped", async () => {
+        const a = await repos.applications.create(app("t1"));
+        expect(await repos.applications.findById("t2", a.id)).toBeNull();
+        expect((await repos.applications.update("t1", a.id, { status: "submitted" })).status).toBe("submitted");
+        await expect(repos.applications.update("t2", a.id, { status: "decided" })).rejects.toBeInstanceOf(NotFoundError);
+      });
+      it("insertMany skips fingerprints already stored for the same application", async () => {
+        const first = await repos.transactions.insertMany([line("a1", "f1", "2026-07-01"), line("a1", "f2", "2026-07-02")]);
+        expect(first).toEqual({ inserted: 2, duplicates: 0 });
+        const again = await repos.transactions.insertMany([line("a1", "f2", "2026-07-02"), line("a1", "f3", "2026-07-03")]);
+        expect(again).toEqual({ inserted: 1, duplicates: 1 });
+        // same fingerprint under a different application is a different line
+        expect(await repos.transactions.insertMany([line("a2", "f1", "2026-07-01")])).toEqual({ inserted: 1, duplicates: 0 });
+        expect(await repos.transactions.insertMany([])).toEqual({ inserted: 0, duplicates: 0 });
+      });
+      it("lists in date order, filtered by category and scoped by tenant", async () => {
+        await repos.transactions.insertMany([
+          line("a1", "f2", "2026-07-02"),
+          line("a1", "f1", "2026-07-01"),
+          { ...line("a1", "f3", "2026-07-03"), category: "expense", amountCents: -500 },
+        ]);
+        const all = await repos.transactions.listByApplication("t1", "a1");
+        expect(all.map((t) => t.date)).toEqual(["2026-07-01", "2026-07-02", "2026-07-03"]);
+        expect(await repos.transactions.listByApplication("t1", "a1", { category: "expense" })).toHaveLength(1);
+        expect(await repos.transactions.listByApplication("t2", "a1")).toHaveLength(0);
+      });
+    });
   });
 }

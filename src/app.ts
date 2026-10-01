@@ -8,6 +8,7 @@ import { leadsRouter } from "./routes/leads"; // step 2
 import { webhooksRouter } from "./routes/webhooks"; // step 4
 import { estimatesRouter } from "./routes/estimates"; // steps 5 and 8
 import { domainsRouter } from "./routes/domains"; // step 10
+import { applicationsRouter } from "./routes/applications"; // steps 6–7
 
 export function createApp(deps: Deps) {
   const app = express();
@@ -23,7 +24,7 @@ export function createApp(deps: Deps) {
   app.use("/webhooks", webhooksRouter(deps));
 
   // Everything below is tenant-scoped: the tenant comes from the Host header
-  app.use("/api", resolveTenant(deps), leadsRouter(deps), estimatesRouter(deps), domainsRouter(deps));
+  app.use("/api", resolveTenant(deps), leadsRouter(deps), estimatesRouter(deps), applicationsRouter(deps), domainsRouter(deps));
 
   app.use(notFoundHandler);
   app.use(errorHandler);

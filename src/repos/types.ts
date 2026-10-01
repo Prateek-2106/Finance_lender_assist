@@ -1,11 +1,13 @@
 // The contract every storage backend must satisfy.
 // Implemented by repos/memory.ts (tests, local dev) and repos/mongo.ts.
-import type { Estimate, Id, Invoice, Lead, Tenant } from "../domain";
+import type { BankTransaction, Estimate, FundingApplication, Id, Invoice, Lead, Tenant, TxnCategory } from "../domain";
 
 export type NewTenant = Omit<Tenant, "id" | "createdAt">;
 export type NewLead = Omit<Lead, "id" | "createdAt">;
 export type NewEstimate = Omit<Estimate, "id" | "createdAt">;
 export type NewInvoice = Omit<Invoice, "id" | "createdAt">;
+export type NewApplication = Omit<FundingApplication, "id" | "createdAt">;
+export type NewTransaction = Omit<BankTransaction, "id" | "createdAt">;
 
 export interface TenantRepo {
   /** Throws ConflictError if the subdomain (or custom hostname) is taken. */
@@ -41,9 +43,24 @@ export interface InvoiceRepo {
   nextNumber(tenantId: Id): Promise<string>;
 }
 
+export interface ApplicationRepo {
+  create(input: NewApplication): Promise<FundingApplication>;
+  findById(tenantId: Id, id: Id): Promise<FundingApplication | null>;
+  update(tenantId: Id, id: Id, patch: Partial<NewApplication>): Promise<FundingApplication>;
+}
+
+export interface TransactionRepo {
+  /** Inserts lines whose fingerprint is new for this application; skips the rest. */
+  insertMany(lines: NewTransaction[]): Promise<{ inserted: number; duplicates: number }>;
+  /** Oldest first (statement order). */
+  listByApplication(tenantId: Id, applicationId: Id, opts?: { category?: TxnCategory }): Promise<BankTransaction[]>;
+}
+
 export interface Repos {
   tenants: TenantRepo;
   leads: LeadRepo;
   estimates: EstimateRepo;
   invoices: InvoiceRepo;
+  applications: ApplicationRepo;
+  transactions: TransactionRepo;
 }

@@ -106,3 +106,11 @@ export const EstimatePatchSchema = z.object({
 export const EstimateTransitionSchema = z.object({
   to: z.enum(["draft", "sent", "accepted", "declined", "invoiced", "needs_review"]),
 });
+
+export const ApplicationCreateSchema = z.object({
+  industry: z.string().trim().min(2).max(80),
+  monthsInBusiness: z.number().int().min(0).max(1200),
+  statedMonthlyRevenueCents: z.number().int().nonnegative(),
+  amountRequestedCents: z.number().int().positive().max(500_000_00),
+  useOfFunds: z.string().trim().min(2).max(500),
+});

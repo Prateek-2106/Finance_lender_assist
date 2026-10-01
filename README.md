@@ -63,3 +63,14 @@ $inv = (Invoke-RestMethod -Method Post "$base/estimates/$($e.id)/invoice" -Heade
 Invoke-WebRequest "$base/invoices/$($inv.id)/pdf" -Headers $k -OutFile invoice.pdf; start invoice.pdf
 (Invoke-RestMethod -Method Post "$base/invoices/$($inv.id)/pay" -Headers $k).receipt
 ```
+
+## Funding application + bank statement
+
+`npm run fixtures` writes six synthetic businesses to `fixtures/statements/` (a statement CSV and an application body for each).
+
+```powershell
+$k = @{ Authorization = "Bearer $($t.apiKey)" }; $base = "http://$($t.tenant.subdomain).lvh.me:3000/api"
+$a = (Invoke-RestMethod -Method Post "$base/applications" -Headers $k -ContentType "application/json" -Body (Get-Content -Raw fixtures\statements\stacked-auto.application.json)).application
+Invoke-RestMethod -Method Post "$base/applications/$($a.id)/statements" -Headers $k -ContentType "text/csv" -Body (Get-Content -Raw fixtures\statements\stacked-auto.csv)
+(Invoke-RestMethod "$base/applications/$($a.id)/transactions" -Headers $k).totals | ConvertTo-Json
+```

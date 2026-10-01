@@ -99,3 +99,43 @@ export interface Receipt {
   amountPaidCents: number;
   paidAt: Date;
 }
+
+// ── Funding (steps 6–7) ─────────────────────────────────────
+
+export type ApplicationStatus = "draft" | "submitted" | "decided";
+
+export interface FundingApplication {
+  id: Id;
+  tenantId: Id; // the business applying is the tenant itself
+  industry: string;
+  monthsInBusiness: number;
+  statedMonthlyRevenueCents: number;
+  amountRequestedCents: number;
+  useOfFunds: string;
+  status: ApplicationStatus;
+  createdAt: Date;
+}
+
+export type TxnCategory =
+  | "revenue"
+  | "transfer_in"
+  | "loan_funding"
+  | "reversal"
+  | "nsf_fee"
+  | "lender_payment"
+  | "transfer_out"
+  | "expense";
+
+export interface BankTransaction {
+  id: Id;
+  tenantId: Id;
+  applicationId: Id;
+  date: string; // YYYY-MM-DD (a bank date has no time zone)
+  description: string;
+  amountCents: number; // credits positive, debits negative
+  balanceCents?: number; // end-of-line running balance, when the bank provides it
+  category: TxnCategory;
+  rule: string; // which classification rule fired: the "why" an underwriter sees
+  fingerprint: string; // dedupe key: re-uploading a statement adds nothing
+  createdAt: Date;
+}

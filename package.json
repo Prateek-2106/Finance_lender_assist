@@ -8,9 +8,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "sms:simulate": "tsx scripts/simulate-sms.ts"
+    "sms:simulate": "tsx scripts/simulate-sms.ts",
+    "fixtures": "tsx fixtures/write.ts"
   },
   "dependencies": {
+    "csv-parse": "^7.0.3",
     "express": "^5.2.1",
     "mongodb": "^7.7.0",
     "pdfkit": "^0.20.2",
