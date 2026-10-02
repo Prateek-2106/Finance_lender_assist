@@ -33,6 +33,8 @@ export interface EstimateRepo {
   findById(tenantId: Id, id: Id): Promise<Estimate | null>;
   /** Newest first. */
   listByTenant(tenantId: Id, opts?: { limit?: number }): Promise<Estimate[]>;
+  /** The newest estimate for a lead that is still being worked on (needs_review or draft). */
+  findOpenByLead(tenantId: Id, leadId: Id): Promise<Estimate | null>;
   update(tenantId: Id, id: Id, patch: Partial<NewEstimate>): Promise<Estimate>;
 }
 

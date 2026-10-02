@@ -1,0 +1,16 @@
+{
+  "app": "npx tsx bin/mainstreet.ts",
+  "watch": {
+    "include": [
+      "bin",
+      "lib"
+    ]
+  },
+  "context": {
+    "domainName": "",
+    "hostedZoneId": "",
+    "githubRepo": "Prateek-2106/mainstreet",
+    "@aws-cdk/aws-ecs:disableEcsImdsBlocking": true,
+    "@aws-cdk/aws-ecs:enableImdsBlockingDeprecatedFeature": false
+  }
+}

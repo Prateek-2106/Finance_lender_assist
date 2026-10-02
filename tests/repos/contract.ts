@@ -50,6 +50,15 @@ export function repoContract(name: string, makeRepos: () => Promise<Repos>) {
         const d = await repos.tenants.create(tenantInput("d"));
         await expect(repos.tenants.update(d.id, { customDomain: cd })).rejects.toBeInstanceOf(ConflictError);
       });
+      it("update with an undefined field removes it", async () => {
+        const t = await repos.tenants.create(tenantInput("joe", { customDomain: { hostname: "joe.com", status: "verified", verificationToken: "x" } }));
+        const u = await repos.tenants.update(t.id, { customDomain: undefined });
+        expect(u).not.toHaveProperty("customDomain");
+        expect(await repos.tenants.findByCustomDomain("joe.com")).toBeNull();
+        // and the hostname is free for someone else
+        const other = await repos.tenants.create(tenantInput("ann"));
+        await repos.tenants.update(other.id, { customDomain: { hostname: "joe.com", status: "pending", verificationToken: "y" } });
+      });
       it("update returns the new document; missing id → NotFoundError", async () => {
         const t = await repos.tenants.create(tenantInput("joe"));
         const u = await repos.tenants.update(t.id, { name: "Joe 2" });
@@ -87,6 +96,14 @@ export function repoContract(name: string, makeRepos: () => Promise<Repos>) {
         const u = await repos.estimates.update("t1", e.id, { status: "sent" });
         expect(u.status).toBe("sent");
         await expect(repos.estimates.update("t2", e.id, { status: "accepted" })).rejects.toBeInstanceOf(NotFoundError);
+      });
+      it("finds the open estimate for a lead, ignoring sent ones and other tenants", async () => {
+        const base = { lineItems: [], taxRateBps: 0 };
+        await repos.estimates.create({ ...base, tenantId: "t1", leadId: "L1", status: "sent" });
+        const open = await repos.estimates.create({ ...base, tenantId: "t1", leadId: "L1", status: "needs_review" });
+        await repos.estimates.create({ ...base, tenantId: "t2", leadId: "L1", status: "draft" });
+        expect((await repos.estimates.findOpenByLead("t1", "L1"))?.id).toBe(open.id);
+        expect(await repos.estimates.findOpenByLead("t1", "L2")).toBeNull();
       });
       it("lists newest first, scoped to tenant", async () => {
         const base = { lineItems: [], taxRateBps: 0, status: "draft" as const };

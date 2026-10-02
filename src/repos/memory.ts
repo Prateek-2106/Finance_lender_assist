@@ -46,7 +46,8 @@ export function createMemoryRepos(): Repos {
         if (patch.subdomain && [...tenants.values()].some((o) => o.id !== id && o.subdomain === patch.subdomain))
           throw new ConflictError("Subdomain is taken");
         if (hostTaken(patch.customDomain?.hostname, id)) throw new ConflictError("Hostname is taken");
-        const next = { ...t, ...clone(patch) };
+        const next: Tenant = { ...t, ...clone(patch) };
+        for (const [k, v] of Object.entries(patch)) if (v === undefined) delete (next as unknown as Record<string, unknown>)[k];
         tenants.set(id, next);
         return clone(next);
       },
@@ -81,6 +82,10 @@ export function createMemoryRepos(): Repos {
       },
       async listByTenant(tenantId, opts = {}) {
         return [...estimates.values()].filter((e) => e.tenantId === tenantId).reverse().slice(0, opts.limit ?? 50).map(clone);
+      },
+      async findOpenByLead(tenantId, leadId) {
+        const e = [...estimates.values()].reverse().find((e) => e.tenantId === tenantId && e.leadId === leadId && (e.status === "needs_review" || e.status === "draft"));
+        return e ? clone(e) : null;
       },
       async update(tenantId, id, patch) {
         const e = estimates.get(id);

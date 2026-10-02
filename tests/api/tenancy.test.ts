@@ -51,6 +51,11 @@ describe("POST /api/leads (public lead capture)", () => {
     expect(res.body.lead.tenantId).toBe(joe.tenant.id);
     expect(res.body.lead.source).toBe("web");
   });
+  it("ignores a spoofed X-Forwarded-Host (the Host header decides the tenant)", async () => {
+    const { app, joe, ana } = await twoTenants();
+    const res = await request(app).post("/api/leads").set("Host", joe.host).set("X-Forwarded-Host", ana.host).send(lead);
+    expect(res.body.lead.tenantId).toBe(joe.tenant.id);
+  });
   it("404s for hosts that are not a tenant", async () => {
     const { app } = await twoTenants();
     expect((await request(app).post("/api/leads").set("Host", `ghost.${BASE}`).send(lead)).status).toBe(404);

@@ -2,6 +2,7 @@ name: ci
 on:
   push:
   pull_request:
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -20,6 +21,7 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+
   e2e:
     runs-on: ubuntu-latest
     steps:
@@ -36,3 +38,63 @@ jobs:
         with:
           name: playwright-traces
           path: test-results
+
+  # The production image must build, start as non-root, and answer /health.
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t mainstreet:ci .
+      - run: docker run -d --name app -p 3000:3000 -e LLM_PROVIDER=none mainstreet:ci
+      - run: |
+          for i in $(seq 1 30); do curl -fsS localhost:3000/health && exit 0; sleep 1; done
+          docker logs app; exit 1
+      - run: test "$(docker exec app whoami)" = node
+
+  infra:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: infra/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  # Turn on by setting the repository variable DEPLOY=true and the secret
+  # AWS_DEPLOY_ROLE_ARN (printed by the first deploy). See README: Deploy to AWS.
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.DEPLOY == 'true'
+    needs: [test, e2e, image, infra]
+    runs-on: ubuntu-latest
+    concurrency: production
+    permissions:
+      id-token: write # lets the job get an AWS role over OIDC; no AWS keys are stored in GitHub
+      contents: read
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: infra/package-lock.json
+      - run: npm ci
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+      - run: npx cdk deploy --require-approval never
+      - name: Smoke test the live site
+        run: |
+          DOMAIN=$(node -p "require('./cdk.json').context.domainName")
+          for i in $(seq 1 20); do curl -fsS "https://$DOMAIN/health" && exit 0; sleep 6; done
+          exit 1

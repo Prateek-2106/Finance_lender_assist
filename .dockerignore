@@ -1,0 +1,11 @@
+node_modules
+dist
+test-results
+playwright-report
+infra/node_modules
+infra/cdk.out
+.git
+.github
+*.patch
+*.pdf
+.env

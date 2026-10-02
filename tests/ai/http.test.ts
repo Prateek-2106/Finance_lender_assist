@@ -114,3 +114,35 @@ describe("POST /api/applications/:id/memo", () => {
     expect(stored.body.application.assessment.decision).toBe("review"); // the engine's decision stands
   });
 });
+
+describe("drafting is idempotent per lead", () => {
+  const reply = { lineItems: [{ sku: "LABOR", quantity: 1 }], questions: [] };
+  it("a second click returns the open draft instead of calling the model again", async () => {
+    const { app, as, joe, prompts } = await setup(reply, reply);
+    await request(app).put("/api/price-list").set(as).send(priceList);
+    const lead = await request(app).post("/api/leads").set("Host", joe.host).send({ name: "Ann", email: "a@b.co", message: "leak" });
+    const a = await request(app).post(`/api/leads/${lead.body.lead.id}/draft-estimate`).set(as);
+    const b = await request(app).post(`/api/leads/${lead.body.lead.id}/draft-estimate`).set(as);
+    expect([a.status, b.status]).toEqual([201, 200]);
+    expect(b.body.estimate.id).toBe(a.body.estimate.id);
+    expect(prompts).toHaveLength(1);
+  });
+  it("two clicks at the same moment share one model call", async () => {
+    const { app, as, joe, prompts } = await setup(reply, reply);
+    await request(app).put("/api/price-list").set(as).send(priceList);
+    const lead = await request(app).post("/api/leads").set("Host", joe.host).send({ name: "Ann", email: "a@b.co", message: "leak" });
+    const [a, b] = await Promise.all([1, 2].map(() => request(app).post(`/api/leads/${lead.body.lead.id}/draft-estimate`).set(as)));
+    expect(a!.body.estimate.id).toBe(b!.body.estimate.id);
+    expect(prompts).toHaveLength(1);
+  });
+  it("once the estimate is sent, drafting again makes a new one", async () => {
+    const { app, as, joe } = await setup(reply, reply);
+    await request(app).put("/api/price-list").set(as).send(priceList);
+    const lead = await request(app).post("/api/leads").set("Host", joe.host).send({ name: "Ann", email: "a@b.co", message: "leak" });
+    const a = await request(app).post(`/api/leads/${lead.body.lead.id}/draft-estimate`).set(as);
+    for (const to of ["draft", "sent"]) await request(app).post(`/api/estimates/${a.body.estimate.id}/transition`).set(as).send({ to });
+    const b = await request(app).post(`/api/leads/${lead.body.lead.id}/draft-estimate`).set(as);
+    expect(b.status).toBe(201);
+    expect(b.body.estimate.id).not.toBe(a.body.estimate.id);
+  });
+});

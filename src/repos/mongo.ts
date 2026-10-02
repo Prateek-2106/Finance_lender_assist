@@ -12,6 +12,14 @@ const fromDoc = <T extends { id: string }>(d: Doc<T> | null): T | null => {
 };
 const newId = () => new ObjectId().toHexString(); // time-ordered → stable "newest first"
 
+/** { a: 1, b: undefined } → { $set: { a: 1 }, $unset: { b: "" } }: undefined means "remove the field". */
+function toUpdate(patch: Record<string, unknown>) {
+  const $set: Record<string, unknown> = {};
+  const $unset: Record<string, ""> = {};
+  for (const [k, v] of Object.entries(patch)) v === undefined ? ($unset[k] = "") : ($set[k] = v);
+  return { ...(Object.keys($set).length ? { $set } : {}), ...(Object.keys($unset).length ? { $unset } : {}) };
+}
+
 async function translateDup<T>(p: Promise<T>, msg: string): Promise<T> {
   try {
     return await p;
@@ -38,6 +46,7 @@ export async function createMongoRepos(db: Db): Promise<Repos> {
     ),
     leads.createIndex({ tenantId: 1, createdAt: -1, _id: -1 }),
     estimates.createIndex({ tenantId: 1, _id: 1 }),
+    estimates.createIndex({ tenantId: 1, leadId: 1, status: 1 }),
     invoices.createIndex({ tenantId: 1, estimateId: 1 }, { unique: true }),
     invoices.createIndex({ tenantId: 1, number: 1 }, { unique: true }),
     applications.createIndex({ tenantId: 1, _id: 1 }),
@@ -63,7 +72,7 @@ export async function createMongoRepos(db: Db): Promise<Repos> {
       },
       async update(id, patch) {
         const d = await translateDup(
-          tenants.findOneAndUpdate({ _id: id }, { $set: patch }, { returnDocument: "after" }),
+          tenants.findOneAndUpdate({ _id: id }, toUpdate(patch), { returnDocument: "after" }),
           "Subdomain or hostname is taken",
         );
         if (!d) throw new NotFoundError("Tenant not found");
@@ -100,6 +109,10 @@ export async function createMongoRepos(db: Db): Promise<Repos> {
       async listByTenant(tenantId, opts = {}) {
         const docs = await estimates.find({ tenantId }).sort({ _id: -1 }).limit(opts.limit ?? 50).toArray();
         return docs.map((d) => fromDoc(d)!);
+      },
+      async findOpenByLead(tenantId, leadId) {
+        const d = await estimates.find({ tenantId, leadId, status: { $in: ["needs_review", "draft"] } }).sort({ _id: -1 }).limit(1).next();
+        return fromDoc(d);
       },
       async update(tenantId, id, patch) {
         const d = await estimates.findOneAndUpdate({ _id: id, tenantId }, { $set: patch }, { returnDocument: "after" });

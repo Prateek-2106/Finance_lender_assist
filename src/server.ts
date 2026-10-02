@@ -4,6 +4,7 @@ import { createApp } from "./app";
 import { createMemoryRepos } from "./repos/memory";
 import { createMongoRepos } from "./repos/mongo";
 import { llmFromEnv } from "./ai/providers";
+import { Resolver } from "node:dns/promises";
 
 const PORT = Number(process.env.PORT ?? 3000);
 const MONGO_URL = process.env.MONGO_URL;
@@ -17,6 +18,7 @@ async function main() {
   const app = createApp({
     repos,
     llm,
+    dns: new Resolver({ timeout: 5000, tries: 2 }),
     config: {
       baseDomain: process.env.BASE_DOMAIN ?? "lvh.me",
       publicUrl: process.env.PUBLIC_URL ?? `http://localhost:${PORT}`,

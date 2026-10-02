@@ -4,7 +4,7 @@
   "description": "Multi-tenant platform for micro-businesses: website, lead capture, estimates, invoices, and funding risk assessment.",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "start": "tsx src/server.ts",
+    "start": "node --enable-source-maps dist/server.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
@@ -12,15 +12,18 @@
     "fixtures": "tsx fixtures/write.ts",
     "web:dev": "vite --config web/vite.config.ts",
     "web:build": "vite build --config web/vite.config.ts",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "build:server": "esbuild src/server.ts --bundle --platform=node --target=node22 --format=esm --packages=external --sourcemap --outfile=dist/server.mjs",
+    "build": "npm run web:build && npm run build:server",
+    "infra:synth": "npm --prefix infra run synth",
+    "infra:deploy": "npm --prefix infra run deploy",
+    "infra:destroy": "npm --prefix infra run destroy"
   },
   "dependencies": {
     "csv-parse": "^7.0.3",
     "express": "^5.2.1",
     "mongodb": "^7.7.0",
     "pdfkit": "^0.20.2",
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {
@@ -35,7 +38,10 @@
     "@types/react-dom": "^19.3.0",
     "@types/supertest": "^7.2.1",
     "@vitejs/plugin-react": "^6.1.1",
+    "esbuild": "^0.28.2",
     "jsdom": "^29.1.1",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "supertest": "^7.3.0",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",

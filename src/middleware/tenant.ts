@@ -25,7 +25,9 @@ export async function tenantForHost(deps: Deps, rawHost: string): Promise<Tenant
 
 export function resolveTenant(deps: Deps): RequestHandler {
   return async (req, res, next) => {
-    const tenant = await tenantForHost(deps, req.hostname ?? "");
+    // The Host header itself, never X-Forwarded-Host: with "trust proxy" on, req.hostname
+    // would believe a client-supplied header and let anyone pick another business's tenant.
+    const tenant = await tenantForHost(deps, req.get("host") ?? "");
     if (!tenant) throw new NotFoundError("Unknown site");
     res.locals.tenant = tenant;
     next();

@@ -7,5 +7,22 @@ services:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
       interval: 5s
       retries: 10
+
+  # The production image, run locally:  docker compose --profile app up --build
+  app:
+    profiles: ["app"]
+    build: .
+    ports: ["3000:3000"]
+    environment:
+      MONGO_URL: mongodb://mongo:27017/mainstreet
+      BASE_DOMAIN: lvh.me
+      PUBLIC_URL: http://localhost:3000
+      LLM_PROVIDER: ollama
+      OLLAMA_URL: http://host.docker.internal:11434   # Ollama on your machine, reached from the container
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    depends_on:
+      mongo:
+        condition: service_healthy
+
 volumes:
   mongo-data:

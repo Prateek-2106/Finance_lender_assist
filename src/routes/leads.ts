@@ -4,6 +4,7 @@ import type { Deps } from "../deps";
 import { InvalidTransitionError, NotFoundError, ServiceUnavailableError } from "../errors";
 import { draftEstimate } from "../ai/estimateDrafter";
 import { createEstimate } from "../services/billing";
+import type { Estimate } from "../domain";
 import { computeTotals } from "../lib/money";
 import { getTenant, requireApiKey } from "../middleware/tenant";
 import { LeadCreateSchema, parseOrThrow, PriceListSchema } from "../schemas";
@@ -12,6 +13,9 @@ const ListQuery = z.object({ limit: z.coerce.number().int().min(1).max(100).defa
 
 export function leadsRouter({ repos, llm }: Deps) {
   const r = Router();
+  // Two clicks at once on one lead share one model call (per server process; the
+  // open-estimate check below covers clicks that arrive after the first finished).
+  const inFlight = new Map<string, Promise<Estimate>>();
 
   // Public: what a tenant's website needs to render itself.
   r.get("/site", (_req, res) => {
@@ -49,15 +53,30 @@ export function leadsRouter({ repos, llm }: Deps) {
     const lead = await repos.leads.findById(tenant.id, String(req.params.id));
     if (!lead) throw new NotFoundError("Lead not found");
 
-    const draft = await draftEstimate(llm, tenant.priceList, lead);
-    const estimate = await createEstimate(repos, tenant, {
-      leadId: lead.id,
-      lineItems: draft.lineItems,
-      status: "needs_review", // a person approves before anything reaches the customer
-      ...(draft.questions.length ? { notes: `Questions for the customer:\n- ${draft.questions.join("\n- ")}` } : {}),
-      aiDraft: { model: draft.model, questions: draft.questions, rejected: draft.rejected },
-    });
-    res.status(201).json({ estimate: { ...estimate, totals: computeTotals(estimate.lineItems, estimate.taxRateBps) } });
+    // Idempotent: a lead with an estimate still being worked on gets that one back.
+    const existing = await repos.estimates.findOpenByLead(tenant.id, lead.id);
+    if (existing) {
+      res.status(200).json({ estimate: { ...existing, totals: computeTotals(existing.lineItems, existing.taxRateBps) } });
+      return;
+    }
+    const key = `${tenant.id}:${lead.id}`;
+    let job = inFlight.get(key);
+    const first = !job;
+    if (!job) {
+      job = (async () => {
+        const draft = await draftEstimate(llm, tenant.priceList, lead);
+        return createEstimate(repos, tenant, {
+          leadId: lead.id,
+          lineItems: draft.lineItems,
+          status: "needs_review", // a person approves before anything reaches the customer
+          ...(draft.questions.length ? { notes: `Questions for the customer:\n- ${draft.questions.join("\n- ")}` } : {}),
+          aiDraft: { model: draft.model, questions: draft.questions, rejected: draft.rejected },
+        });
+      })().finally(() => inFlight.delete(key));
+      inFlight.set(key, job);
+    }
+    const estimate = await job;
+    res.status(first ? 201 : 200).json({ estimate: { ...estimate, totals: computeTotals(estimate.lineItems, estimate.taxRateBps) } });
   });
 
   return r;
