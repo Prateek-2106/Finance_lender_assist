@@ -14,7 +14,8 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     res.status(400).json({ error: "Malformed JSON body" });
     return;
   }
-  const status = typeof err?.status === "number" && err.status >= 400 && err.status < 500 ? err.status : 500;
+  const known = typeof err?.status === "number" && ((err.status >= 400 && err.status < 500) || err.status === 502 || err.status === 503);
+  const status = known ? err.status : 500;
   if (status === 500) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });

@@ -75,6 +75,7 @@ export interface Estimate {
   taxRateBps: number;
   status: EstimateStatus;
   notes?: string;
+  aiDraft?: { model: string; questions: string[]; rejected: { sku: string; quantity: unknown; why: string }[] };
   createdAt: Date;
 }
 
@@ -114,6 +115,7 @@ export interface FundingApplication {
   useOfFunds: string;
   status: ApplicationStatus;
   assessment?: import("./risk/assess").Assessment; // latest run of the risk engine
+  memo?: import("./ai/memo").Memo; // AI underwriting memo, verified against the assessment
   createdAt: Date;
 }
 

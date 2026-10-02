@@ -114,3 +114,8 @@ export const ApplicationCreateSchema = z.object({
   amountRequestedCents: z.number().int().positive().max(500_000_00),
   useOfFunds: z.string().trim().min(2).max(500),
 });
+
+export const PriceListSchema = z
+  .array(PriceItemSchema)
+  .max(500)
+  .refine((xs) => new Set(xs.map((x) => x.sku.toUpperCase())).size === xs.length, { message: "Duplicate SKU" });

@@ -95,3 +95,25 @@ Scorecard weights, curves, knockouts and offer terms live in `src/risk/config.ts
 | struggling-salon | decline | D | NSF fees, negative balances, revenue down 23% |
 | new-food-truck | decline | B | Under 6 months in business |
 | inflated-contractor | review | A | States 2.8× the revenue the bank shows |
+
+## AI layer (Ollama by default)
+
+The model proposes; code verifies. Memo claims must cite metric ids and use the cited numbers; drafted estimates use only price-list SKUs at list prices and wait for human review.
+
+```powershell
+# server window: llama3.1:8b via Ollama is the default (LLM_PROVIDER=anthropic + ANTHROPIC_API_KEY for Claude)
+npm run dev                                  # prints "language model: ollama/llama3.1:8b"
+
+# underwriting memo for an assessed application
+$m = (Invoke-RestMethod -Method Post "$base/applications/$($a.id)/memo" -Headers $k).memo
+$m.summary.text; $m.risks | % { "- $($_.text) [$($_.cites -join ',')]" }
+$m | Select-Object engineDecision, modelRecommendation, disagreement
+$m.dropped | Format-Table why, text -Wrap
+
+# estimate drafted from a lead
+$pl = '[{"sku":"WH-FLUSH","name":"Water heater flush","unitPriceCents":12900},{"sku":"WH-ANODE","name":"Anode rod replacement","unitPriceCents":18500},{"sku":"TPR-VALVE","name":"Pressure relief valve","unitPriceCents":4500},{"sku":"LABOR","name":"Labor","unitPriceCents":9500,"unit":"hour"},{"sku":"TRIP","name":"Service call","unitPriceCents":7900}]'
+Invoke-RestMethod -Method Put "$base/price-list" -Headers $k -ContentType "application/json" -Body $pl | Out-Null
+$lead = (Invoke-RestMethod -Method Post "$base/leads" -ContentType "application/json" -Body '{"name":"Ann","phone":"716-555-0123","message":"Water heater is 8 years old, makes popping noises and the relief valve drips. Can you flush it and fix the leak?"}').lead
+$d = (Invoke-RestMethod -Method Post "$base/leads/$($lead.id)/draft-estimate" -Headers $k).estimate
+$d.lineItems | Format-Table sku, description, quantity, unitPriceCents; $d.totals; $d.notes; $d.aiDraft.rejected
+```

@@ -9,7 +9,8 @@ export interface Config {
 
 /** Minimal LLM interface (step 8). Implement it with any provider. */
 export interface LlmClient {
-  complete(req: { system: string; prompt: string }): Promise<string>;
+  readonly model: string; // recorded on everything the model produces
+  complete(req: { system: string; prompt: string; json?: boolean }): Promise<string>;
 }
 
 /** Minimal DNS interface (step 10). Real impl wraps node:dns/promises. */

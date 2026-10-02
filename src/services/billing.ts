@@ -9,7 +9,7 @@ const EDITABLE: EstimateStatus[] = ["needs_review", "draft"];
 export async function createEstimate(
   repos: Repos,
   tenant: Tenant,
-  input: { leadId?: Id; lineItems: LineItem[]; notes?: string; status?: "draft" | "needs_review" },
+  input: { leadId?: Id; lineItems: LineItem[]; notes?: string; status?: "draft" | "needs_review"; aiDraft?: Estimate["aiDraft"] },
 ): Promise<Estimate> {
   if (input.leadId && !(await repos.leads.findById(tenant.id, input.leadId))) throw new NotFoundError("Lead not found");
   return repos.estimates.create({
@@ -19,6 +19,7 @@ export async function createEstimate(
     notes: input.notes,
     taxRateBps: tenant.taxRateBps,
     status: input.status ?? "draft",
+    ...(input.aiDraft ? { aiDraft: input.aiDraft } : {}),
   });
 }
 

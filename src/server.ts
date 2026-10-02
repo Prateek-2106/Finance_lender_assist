@@ -3,6 +3,7 @@ import { MongoClient } from "mongodb";
 import { createApp } from "./app";
 import { createMemoryRepos } from "./repos/memory";
 import { createMongoRepos } from "./repos/mongo";
+import { llmFromEnv } from "./ai/providers";
 
 const PORT = Number(process.env.PORT ?? 3000);
 const MONGO_URL = process.env.MONGO_URL;
@@ -12,8 +13,10 @@ async function main() {
     ? await createMongoRepos((await MongoClient.connect(MONGO_URL)).db())
     : createMemoryRepos();
 
+  const llm = llmFromEnv(process.env);
   const app = createApp({
     repos,
+    llm,
     config: {
       baseDomain: process.env.BASE_DOMAIN ?? "lvh.me",
       publicUrl: process.env.PUBLIC_URL ?? `http://localhost:${PORT}`,
@@ -24,6 +27,7 @@ async function main() {
   app.listen(PORT, () => {
     console.log(`mainstreet on http://localhost:${PORT} (${MONGO_URL ? "MongoDB" : "in-memory store"})`);
     console.log(`tenant sites: http://<subdomain>.lvh.me:${PORT}`);
+    console.log(`language model: ${llm?.model ?? "none"}`);
   });
 }
 

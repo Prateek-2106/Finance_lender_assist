@@ -20,3 +20,6 @@ export class UnauthorizedError extends Error {
 export class ForbiddenError extends Error {
   readonly status = 403;
 }
+export class ServiceUnavailableError extends Error {
+  readonly status = 503;
+}
