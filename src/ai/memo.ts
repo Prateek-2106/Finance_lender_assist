@@ -40,7 +40,8 @@ export interface Memo {
 const SYSTEM = `You are a small-business underwriting analyst writing a short internal memo.
 Rules:
 - Use ONLY the facts provided. Do not invent numbers, events or context.
-- Every claim must cite the source ids it relies on in "cites", e.g. ["M1","M7"]. Valid ids are the metric ids given (M1–M8) and "OFFER".
+- Every claim must cite the source ids it relies on in "cites", e.g. ["M1","M7"]. Valid ids are the metric ids (M1–M8), the knockout ids (K1, K2, …) and "OFFER".
+- The summary states the engine's decision and its main reason, from engine.reasons.
 - When a claim states a number, copy it exactly as shown in the cited source.
 - Keep each claim to one or two sentences. Plain English, no hedging boilerplate.
 Reply with only a JSON object:
@@ -65,7 +66,8 @@ export function memoFacts(app: FundingApplication, a: Assessment) {
       score: a.score,
       band: a.band,
       ...(a.bandNote ? { bandNote: a.bandNote } : {}),
-      knockouts: a.knockouts.map((k) => ({ message: k.message, cites: k.metricIds })),
+      knockouts: a.knockouts.map((k, i) => ({ id: `K${i + 1}`, message: k.message, metrics: k.metricIds })),
+      reasons: a.reasons.map((r) => ({ text: r.text, metrics: r.metricIds })),
     },
     OFFER: a.offer
       ? {
@@ -123,7 +125,12 @@ function numbersMatch(claimed: number, allowed: number[]): boolean {
 export function verifyMemo(app: FundingApplication, a: Assessment, reply: z.infer<typeof MemoReplySchema>, model: string, now = new Date()): Memo {
   const facts = memoFacts(app, a);
   const sources = new Map<string, unknown>(facts.metrics.map((m) => [m.id, m]));
+  for (const k of facts.engine.knockouts) sources.set(k.id, k);
   sources.set("OFFER", facts.OFFER);
+  // Engine statements (knockouts, reasons) are derived from metrics; a claim citing those
+  // metrics may use their numbers too ("payments exceed 15% of daily revenue" citing M7, M1).
+  const derived = [...facts.engine.knockouts, ...facts.engine.reasons];
+  const numbersVia = (cites: string[]) => derived.filter((d) => d.metrics.some((id) => cites.includes(id))).flatMap((d) => numbersIn(d));
   const dropped: Memo["dropped"] = [];
 
   const check = (section: MemoClaim["section"], c: ClaimT): MemoClaim | null => {
@@ -134,7 +141,7 @@ export function verifyMemo(app: FundingApplication, a: Assessment, reply: z.infe
     if (cites.length === 0) return void dropped.push({ ...claim, why: "no citation" }), null;
     if (cites.includes("OFFER") && facts.OFFER === "none") return void dropped.push({ ...claim, why: "cites an offer, but there is none" }), null;
     // numbers may also come from the application itself, which the model was shown
-    const allowed = [...cites.flatMap((id) => numbersIn(sources.get(id))), ...numbersIn(facts.application)];
+    const allowed = [...cites.flatMap((id) => numbersIn(sources.get(id))), ...numbersVia(cites), ...numbersIn(facts.application)];
     const bad = extractNumbers(claim.text).filter((n) => !numbersMatch(n, allowed));
     if (bad.length) return void dropped.push({ ...claim, why: `number(s) ${bad.join(", ")} not found in ${cites.join(", ")}` }), null;
     return claim;

@@ -68,6 +68,22 @@ describe("verifyMemo", () => {
     const m = verifyMemo(app, a, reply({ strengths: [{ text: "The offer is affordable.", cites: ["OFFER"] }] }), "fake");
     expect(m.dropped[0]!.why).toMatch(/no(ne| offer)/);
   });
+  // Regression: llama3.1:8b, 2026-10-02 live run. A true claim taken from the knockout was dropped
+  // because "15%" lives in the knockout rule, not in the metrics the model cited.
+  it("keeps a true claim whose number comes from a knockout on the cited metrics", () => {
+    const live = { text: "The applicant's existing lender payments already exceed 15% of their daily revenue, which may indicate a cash flow issue.", cites: ["M7", "M1"] };
+    expect(verifyMemo(app, a, reply({ risks: [live] }), "fake").risks).toHaveLength(1);
+    expect(verifyMemo(app, a, reply({ risks: [{ ...live, cites: ["K1"] }] }), "fake").risks).toHaveLength(1);
+  });
+  it("still drops a wrong number in the same sentence", () => {
+    const wrong = { text: "Existing lender payments already exceed 25% of daily revenue.", cites: ["M7", "M1"] };
+    expect(verifyMemo(app, a, reply({ risks: [wrong] }), "fake").dropped[0]!.why).toMatch(/25/);
+  });
+  it("knockout numbers don't leak to claims citing unrelated metrics", () => {
+    const m = verifyMemo(app, a, reply({ strengths: [{ text: "Volatility is low, under 15%.", cites: ["M3"] }] }), "fake");
+    expect(m.strengths).toEqual([]);
+  });
+
   it("flags, but does not obey, a model that disagrees with the engine", () => {
     const m = verifyMemo(app, a, reply({ recommendation: "approve" }), "fake");
     expect(m).toMatchObject({ engineDecision: "review", modelRecommendation: "approve", disagreement: true });
@@ -87,7 +103,7 @@ describe("the prompt", () => {
     const sensitive = { ...app, tenantId: "TENANT-SECRET-ID", id: "APP-ID-123" } as FundingApplication & Record<string, unknown>;
     (sensitive as Record<string, unknown>).ownerName = "Pat Example";
     const { prompt, system } = buildMemoPrompt(sensitive, a);
-    for (const s of ["M1", "M7", "$60,322", "review"]) expect(prompt).toContain(s);
+    for (const s of ["M1", "M7", "$60,322", "review", "K1", "Existing lender payments"]) expect(prompt).toContain(s);
     for (const s of ["TENANT-SECRET-ID", "APP-ID-123", "Pat Example", "apiKey", "phone", "email"]) expect(prompt + system).not.toContain(s);
   });
 });
