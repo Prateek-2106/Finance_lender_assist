@@ -138,8 +138,8 @@ export function repoContract(name: string, makeRepos: () => Promise<Repos>) {
       it("applications are tenant-scoped", async () => {
         const a = await repos.applications.create(app("t1"));
         expect(await repos.applications.findById("t2", a.id)).toBeNull();
-        expect((await repos.applications.update("t1", a.id, { status: "submitted" })).status).toBe("submitted");
-        await expect(repos.applications.update("t2", a.id, { status: "decided" })).rejects.toBeInstanceOf(NotFoundError);
+        expect((await repos.applications.update("t1", a.id, { status: "assessed" })).status).toBe("assessed");
+        await expect(repos.applications.update("t2", a.id, { status: "assessed" })).rejects.toBeInstanceOf(NotFoundError);
       });
       it("insertMany skips fingerprints already stored for the same application", async () => {
         const first = await repos.transactions.insertMany([line("a1", "f1", "2026-07-01"), line("a1", "f2", "2026-07-02")]);

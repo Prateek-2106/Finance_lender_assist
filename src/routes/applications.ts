@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { Deps } from "../deps";
 import { getTenant, requireApiKey } from "../middleware/tenant";
 import { ApplicationCreateSchema, parseOrThrow } from "../schemas";
-import { createApplication, getApplication, ingestStatement, transactionSummary } from "../services/applications";
+import { assessApplication, createApplication, getApplication, ingestStatement, transactionSummary } from "../services/applications";
 
 const CategoryQuery = z.object({
   category: z
@@ -33,6 +33,10 @@ export function applicationsRouter({ repos }: Deps) {
       res.status(201).json(await ingestStatement(repos, getTenant(res).id, id(req.params.id), csv));
     },
   );
+
+  r.post("/applications/:id/assess", async (req, res) => {
+    res.json({ application: await assessApplication(repos, getTenant(res).id, id(req.params.id)) });
+  });
 
   r.get("/applications/:id/transactions", async (req, res) => {
     const { category } = parseOrThrow(CategoryQuery, req.query);

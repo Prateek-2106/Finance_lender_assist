@@ -74,3 +74,24 @@ $a = (Invoke-RestMethod -Method Post "$base/applications" -Headers $k -ContentTy
 Invoke-RestMethod -Method Post "$base/applications/$($a.id)/statements" -Headers $k -ContentType "text/csv" -Body (Get-Content -Raw fixtures\statements\stacked-auto.csv)
 (Invoke-RestMethod "$base/applications/$($a.id)/transactions" -Headers $k).totals | ConvertTo-Json
 ```
+
+## Risk assessment
+
+```powershell
+$r = (Invoke-RestMethod -Method Post "$base/applications/$($a.id)/assess" -Headers $k).application.assessment
+$r | Select-Object decision, band, score, bandNote
+$r.offer
+$r.reasons | % { "- $($_.text) [$($_.metricIds -join ',')]" }
+$r.metrics | Format-Table id, label, display
+```
+
+Scorecard weights, curves, knockouts and offer terms live in `src/risk/config.ts`; every assessment records the scorecard version that produced it.
+
+| Fixture | Decision | Band | Why |
+| --- | --- | --- | --- |
+| steady-bakery | approve | A | Steady growth, cushion, no debt |
+| seasonal-landscaper | approve | B | Score qualifies for A; capped at B by revenue volatility |
+| stacked-auto | review | B | Two lenders already take more than 15% of daily revenue |
+| struggling-salon | decline | D | NSF fees, negative balances, revenue down 23% |
+| new-food-truck | decline | B | Under 6 months in business |
+| inflated-contractor | review | A | States 2.8× the revenue the bank shows |

@@ -1,6 +1,7 @@
 import type { FundingApplication, Id, Tenant, TxnCategory } from "../domain";
 import { InvalidTransitionError, NotFoundError, ValidationError } from "../errors";
 import type { Repos } from "../repos/types";
+import { assess } from "../risk/assess";
 import { classify } from "../risk/classify";
 import { fingerprints } from "../risk/fingerprint";
 import { parseStatementCsv } from "../risk/statementCsv";
@@ -61,4 +62,13 @@ export async function transactionSummary(repos: Repos, tenantId: Id, application
     totals,
     transactions,
   };
+}
+
+/** Runs the risk engine on everything ingested so far and stores the result. Re-runnable. */
+export async function assessApplication(repos: Repos, tenantId: Id, applicationId: Id) {
+  const app = await getApplication(repos, tenantId, applicationId);
+  const txns = await repos.transactions.listByApplication(tenantId, applicationId);
+  if (txns.length === 0) throw new ValidationError("Upload at least one bank statement before assessing");
+  const assessment = assess(app, txns);
+  return repos.applications.update(tenantId, applicationId, { status: "assessed", assessment });
 }

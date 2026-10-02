@@ -77,9 +77,11 @@ export function generateStatement(p: Profile): GeneratedLine[] {
     if (p.savings && bal < 200_000 && businessDay) push(date, "ONLINE TRANSFER FROM SAV 4821", 500_000, "transfer_in");
 
     // ── debits
-    if (dom === 1) debit(date, "RENT - OAK STREET PROPERTIES", planned * 0.1 * k, "expense");
-    if (dom === 15) debit(date, "NATIONAL GRID UTILITY", planned * 0.03 * k, "expense");
-    if (dow === 5) debit(date, "ADP PAYROLL", ((planned * 0.35) / 4.33) * k, "expense");
+    // fixed costs follow the business's normal size, not this month's sales
+    const base = p.baseMonthlyRevenueCents;
+    if (dom === 1) debit(date, "RENT - OAK STREET PROPERTIES", base * 0.1 * k, "expense");
+    if (dom === 15) debit(date, "NATIONAL GRID UTILITY", base * 0.03 * k, "expense");
+    if (dow === 5) debit(date, "ADP PAYROLL", ((base * 0.35) / 4.33) * k, "expense");
     if (dow === 2 || dow === 4) debit(date, r.pick(SUPPLIERS), ((planned * 0.3) / 8.66) * k, "expense");
     if (businessDay && r.next() < 0.4) debit(date, r.pick(["SHELL OIL", "COMCAST BUSINESS", "STAPLES", "GOOGLE ADS"]), ((planned * 0.05) / 8.7) * k, "expense");
     if (businessDay)

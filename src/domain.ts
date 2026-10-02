@@ -102,7 +102,7 @@ export interface Receipt {
 
 // ── Funding (steps 6–7) ─────────────────────────────────────
 
-export type ApplicationStatus = "draft" | "submitted" | "decided";
+export type ApplicationStatus = "draft" | "assessed";
 
 export interface FundingApplication {
   id: Id;
@@ -113,6 +113,7 @@ export interface FundingApplication {
   amountRequestedCents: number;
   useOfFunds: string;
   status: ApplicationStatus;
+  assessment?: import("./risk/assess").Assessment; // latest run of the risk engine
   createdAt: Date;
 }
 
