@@ -11,6 +11,8 @@ export default defineConfig({
     baseURL: `http://joes-plumbing.lvh.me:${PORT}`,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
+    // PW_CHANNEL=chrome (or msedge) uses the browser already installed instead of downloading one
+    ...(process.env.PW_CHANNEL ? { channel: process.env.PW_CHANNEL } : {}),
     launchOptions: {
       // *.lvh.me → 127.0.0.1 without needing DNS (works offline and in CI)
       args: ["--host-resolver-rules=MAP *.lvh.me 127.0.0.1"],

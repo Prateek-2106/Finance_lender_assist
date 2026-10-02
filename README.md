@@ -134,4 +134,7 @@ For live editing, run `npm run web:dev` alongside `npm run dev` and open `http:/
 ```powershell
 npx playwright install chromium   # once
 npm run e2e                       # builds the app, starts a seeded server with a scripted model, runs e2e/
+
+# download blocked or timing out? use the Chrome (or Edge) you already have:
+$env:PW_CHANNEL = "chrome"; npm run e2e
 ```
