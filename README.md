@@ -111,7 +111,7 @@ $m | Select-Object engineDecision, modelRecommendation, disagreement
 $m.dropped | Format-Table why, text -Wrap
 
 # estimate drafted from a lead
-$pl = '[{"sku":"WH-FLUSH","name":"Water heater flush","unitPriceCents":12900},{"sku":"WH-ANODE","name":"Anode rod replacement","unitPriceCents":18500},{"sku":"TPR-VALVE","name":"Pressure relief valve","unitPriceCents":4500},{"sku":"LABOR","name":"Labor","unitPriceCents":9500,"unit":"hour"},{"sku":"TRIP","name":"Service call","unitPriceCents":7900}]'
+$pl = '[{"sku":"WH-FLUSH","name":"Water heater flush","unitPriceCents":12900},{"sku":"WH-ANODE","name":"Anode rod replacement","unitPriceCents":18500},{"sku":"TPR-VALVE","name":"Pressure relief valve","unitPriceCents":4500},{"sku":"LABOR","name":"Labor","unitPriceCents":9500,"unit":"hour","fractional":true},{"sku":"TRIP","name":"Service call","unitPriceCents":7900}]'
 Invoke-RestMethod -Method Put "$base/price-list" -Headers $k -ContentType "application/json" -Body $pl | Out-Null
 $lead = (Invoke-RestMethod -Method Post "$base/leads" -ContentType "application/json" -Body '{"name":"Ann","phone":"716-555-0123","message":"Water heater is 8 years old, makes popping noises and the relief valve drips. Can you flush it and fix the leak?"}').lead
 $d = (Invoke-RestMethod -Method Post "$base/leads/$($lead.id)/draft-estimate" -Headers $k).estimate

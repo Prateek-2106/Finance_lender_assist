@@ -43,6 +43,7 @@ test("the owner drafts an estimate from the lead, approves it, invoices and gets
   await expect(est).toContainText("Left out: GOLD-PLATING (not on the price list)");
   await expect(est).toContainText("$189.23"); // 129 + 45 = 174.00, + 8.75% tax 15.23
 
+  await expect(est.getByLabel("Quantity for Pressure relief valve")).toHaveAttribute("step", "1");
   await est.getByLabel("Quantity for Pressure relief valve").fill("2");
   await est.getByRole("button", { name: "Save changes" }).click();
   await expect(est).toContainText("$238.16"); // 129 + 90 = 219.00; tax 19.1625 → 19.16

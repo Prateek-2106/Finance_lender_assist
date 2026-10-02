@@ -38,7 +38,7 @@ await repos.tenants.create({
   priceList: [
     { sku: "WH-FLUSH", name: "Water heater flush", unitPriceCents: 12900 },
     { sku: "TPR-VALVE", name: "Pressure relief valve", unitPriceCents: 4500 },
-    { sku: "LABOR", name: "Labor", unitPriceCents: 9500, unit: "hour" },
+    { sku: "LABOR", name: "Labor", unitPriceCents: 9500, unit: "hour", fractional: true },
   ],
 });
 

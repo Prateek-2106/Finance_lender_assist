@@ -11,6 +11,7 @@ export interface PriceItem {
   name: string; // e.g. "Water heater flush"
   unitPriceCents: number;
   unit?: string; // e.g. "hour", "each"
+  fractional?: boolean; // can be sold in parts (1.5 hours, 12.5 feet); otherwise whole units only
 }
 
 export interface CustomDomain {
@@ -49,8 +50,9 @@ export interface Lead {
 export interface LineItem {
   sku?: string;
   description: string;
-  quantity: number; // may be fractional (1.5 hours)
+  quantity: number; // whole units unless the price-list item is fractional (1.5 hours)
   unitPriceCents: number;
+  fractional?: boolean; // copied from the price list; the server re-derives it, never trusts the client
 }
 
 export interface Totals {

@@ -16,6 +16,7 @@ export const PriceItemSchema = z.object({
   name: z.string().trim().min(1).max(200),
   unitPriceCents: z.number().int().nonnegative(),
   unit: z.string().trim().max(20).optional(),
+  fractional: z.boolean().optional(),
 });
 
 export const LineItemSchema = z.object({
@@ -23,6 +24,7 @@ export const LineItemSchema = z.object({
   description: z.string().trim().min(1).max(500),
   quantity: z.number().positive().max(10_000),
   unitPriceCents: z.number().int().nonnegative(),
+  fractional: z.boolean().optional(),
 });
 
 export const TenantCreateSchema = z

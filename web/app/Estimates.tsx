@@ -149,7 +149,7 @@ function EstimateDetail({ id, onChange }: { id: string; onChange: () => void }) 
                 {editable ? (
                   <input
                     aria-label={`Quantity for ${li.description}`}
-                    type="number" min="0.25" step="0.25" value={li.quantity} style={{ width: "5rem", textAlign: "right" }}
+                    type="number" min={li.fractional ? 0.25 : 1} step={li.fractional ? 0.25 : 1} value={li.quantity} style={{ width: "5rem", textAlign: "right" }}
                     onChange={(ev) => setItems(items.map((x, j) => (j === i ? { ...x, quantity: Number(ev.target.value) } : x)))}
                   />
                 ) : (

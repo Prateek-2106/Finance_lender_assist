@@ -1,10 +1,30 @@
-import type { Estimate, EstimateStatus, Id, Invoice, LineItem, Receipt, Tenant } from "../domain";
+import type { Estimate, EstimateStatus, Id, Invoice, LineItem, PriceItem, Receipt, Tenant } from "../domain";
 import { InvalidTransitionError, NotFoundError, ValidationError } from "../errors";
 import { computeTotals } from "../lib/money";
 import type { Repos } from "../repos/types";
 import { assertTransition } from "../workflow/estimate";
 
 const EDITABLE: EstimateStatus[] = ["needs_review", "draft"];
+
+/**
+ * Lines that name a price-list SKU take their "can be sold in parts" rule from the
+ * price list (never from the client), and must be whole numbers unless it allows parts.
+ * Free-form lines without a SKU are up to the owner.
+ */
+export function checkQuantities(priceList: PriceItem[], lineItems: LineItem[]): LineItem[] {
+  const bySku = new Map(priceList.map((p) => [p.sku.toUpperCase(), p]));
+  const problems: { path: string; message: string }[] = [];
+  const out = lineItems.map((li, i) => {
+    const item = li.sku ? bySku.get(li.sku.toUpperCase()) : undefined;
+    const { fractional: _ignored, ...rest } = li;
+    if (!item) return rest;
+    if (!item.fractional && !Number.isInteger(li.quantity))
+      problems.push({ path: `lineItems.${i}.quantity`, message: `${item.name} is sold in whole units; ${li.quantity} isn't a whole number` });
+    return item.fractional ? { ...rest, fractional: true } : rest;
+  });
+  if (problems.length) throw new ValidationError("Some quantities aren't allowed", problems);
+  return out;
+}
 
 export async function createEstimate(
   repos: Repos,
@@ -15,7 +35,7 @@ export async function createEstimate(
   return repos.estimates.create({
     tenantId: tenant.id,
     leadId: input.leadId,
-    lineItems: input.lineItems,
+    lineItems: checkQuantities(tenant.priceList, input.lineItems),
     notes: input.notes,
     taxRateBps: tenant.taxRateBps,
     status: input.status ?? "draft",
@@ -32,7 +52,8 @@ async function getEstimate(repos: Repos, tenantId: Id, id: Id): Promise<Estimate
 export async function updateLineItems(repos: Repos, tenantId: Id, id: Id, lineItems: LineItem[]): Promise<Estimate> {
   const e = await getEstimate(repos, tenantId, id);
   if (!EDITABLE.includes(e.status)) throw new InvalidTransitionError(`Cannot edit an estimate that is ${e.status}`);
-  return repos.estimates.update(tenantId, id, { lineItems });
+  const tenant = await repos.tenants.findById(tenantId);
+  return repos.estimates.update(tenantId, id, { lineItems: checkQuantities(tenant?.priceList ?? [], lineItems) });
 }
 
 export async function transitionEstimate(repos: Repos, tenantId: Id, id: Id, to: EstimateStatus): Promise<Estimate> {

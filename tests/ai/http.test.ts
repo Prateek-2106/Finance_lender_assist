@@ -146,3 +146,55 @@ describe("drafting is idempotent per lead", () => {
     expect(b.body.estimate.id).not.toBe(a.body.estimate.id);
   });
 });
+
+describe("quantities follow the price list", () => {
+  const list = [
+    { sku: "WH-FLUSH", name: "Water heater flush", unitPriceCents: 12900 },
+    { sku: "LABOR", name: "Labor", unitPriceCents: 9500, unit: "hour", fractional: true },
+  ];
+  async function estimate() {
+    const { app, as } = await setup();
+    await request(app).put("/api/price-list").set(as).send(list);
+    const { body } = await request(app).post("/api/estimates").set(as).send({
+      lineItems: [
+        { sku: "WH-FLUSH", description: "Water heater flush", quantity: 1, unitPriceCents: 12900 },
+        { sku: "LABOR", description: "Labor", quantity: 1, unitPriceCents: 9500 },
+      ],
+    });
+    return { app, as, id: body.estimate.id as string, est: body.estimate };
+  }
+
+  // Regression: a live estimate was invoiced with 1.75 water heater flushes (2026-10-02).
+  it("rejects 1.75 of something sold in whole units, naming the item", async () => {
+    const { app, as, id, est } = await estimate();
+    const res = await request(app).patch(`/api/estimates/${id}`).set(as).send({
+      lineItems: est.lineItems.map((l: { sku: string }) => (l.sku === "WH-FLUSH" ? { ...l, quantity: 1.75 } : l)),
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.issues[0]).toEqual({ path: "lineItems.0.quantity", message: "Water heater flush is sold in whole units; 1.75 isn't a whole number" });
+  });
+
+  it("allows 1.5 hours of labor and marks the line so the UI can step by parts", async () => {
+    const { app, as, id, est } = await estimate();
+    const res = await request(app).patch(`/api/estimates/${id}`).set(as).send({
+      lineItems: est.lineItems.map((l: { sku: string }) => (l.sku === "LABOR" ? { ...l, quantity: 1.5 } : l)),
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.estimate.lineItems[1]).toMatchObject({ sku: "LABOR", quantity: 1.5, fractional: true });
+    expect(res.body.estimate.lineItems[0]).not.toHaveProperty("fractional");
+  });
+
+  it("ignores a client claiming an item is fractional", async () => {
+    const { app, as, id, est } = await estimate();
+    const res = await request(app).patch(`/api/estimates/${id}`).set(as).send({
+      lineItems: est.lineItems.map((l: { sku: string }) => (l.sku === "WH-FLUSH" ? { ...l, quantity: 1.5, fractional: true } : l)),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("leaves free-form lines without a SKU to the owner", async () => {
+    const { app, as } = await estimate();
+    const res = await request(app).post("/api/estimates").set(as).send({ lineItems: [{ description: "Haul away old heater", quantity: 0.5, unitPriceCents: 10000 }] });
+    expect(res.status).toBe(201);
+  });
+});
