@@ -12,5 +12,5 @@
     "types": ["node", "vitest/globals"],
     "noEmit": true
   },
-  "include": ["src", "tests", "fixtures", "scripts"]
+  "include": ["src", "tests", "fixtures", "scripts", "web", "e2e"]
 }

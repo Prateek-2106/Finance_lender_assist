@@ -88,6 +88,14 @@ export function repoContract(name: string, makeRepos: () => Promise<Repos>) {
         expect(u.status).toBe("sent");
         await expect(repos.estimates.update("t2", e.id, { status: "accepted" })).rejects.toBeInstanceOf(NotFoundError);
       });
+      it("lists newest first, scoped to tenant", async () => {
+        const base = { lineItems: [], taxRateBps: 0, status: "draft" as const };
+        const a = await repos.estimates.create({ ...base, tenantId: "t1" });
+        const b = await repos.estimates.create({ ...base, tenantId: "t1" });
+        await repos.estimates.create({ ...base, tenantId: "t2" });
+        expect((await repos.estimates.listByTenant("t1")).map((e) => e.id)).toEqual([b.id, a.id]);
+        expect(await repos.estimates.listByTenant("t1", { limit: 1 })).toHaveLength(1);
+      });
     });
 
     describe("invoices", () => {
@@ -135,6 +143,12 @@ export function repoContract(name: string, makeRepos: () => Promise<Repos>) {
         fingerprint,
       });
 
+      it("applications list newest first, scoped to tenant", async () => {
+        const x = await repos.applications.create(app("t1"));
+        const y = await repos.applications.create(app("t1"));
+        await repos.applications.create(app("t2"));
+        expect((await repos.applications.listByTenant("t1")).map((a) => a.id)).toEqual([y.id, x.id]);
+      });
       it("applications are tenant-scoped", async () => {
         const a = await repos.applications.create(app("t1"));
         expect(await repos.applications.findById("t2", a.id)).toBeNull();

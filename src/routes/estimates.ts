@@ -28,6 +28,11 @@ export function estimatesRouter({ repos }: Deps) {
     res.status(201).json({ estimate: withTotals(e) });
   });
 
+  r.get("/estimates", async (_req, res) => {
+    const list = await repos.estimates.listByTenant(getTenant(res).id);
+    res.json({ estimates: list.map(withTotals) });
+  });
+
   r.get("/estimates/:id", async (req, res) => {
     const e = await repos.estimates.findById(getTenant(res).id, id(req.params.id));
     if (!e) throw new NotFoundError("Estimate not found");

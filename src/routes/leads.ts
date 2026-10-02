@@ -13,6 +13,12 @@ const ListQuery = z.object({ limit: z.coerce.number().int().min(1).max(100).defa
 export function leadsRouter({ repos, llm }: Deps) {
   const r = Router();
 
+  // Public: what a tenant's website needs to render itself.
+  r.get("/site", (_req, res) => {
+    const t = getTenant(res);
+    res.json({ site: { name: t.name, subdomain: t.subdomain } });
+  });
+
   r.post("/leads", async (req, res) => {
     const input = parseOrThrow(LeadCreateSchema, req.body);
     const lead = await repos.leads.create({ ...input, tenantId: getTenant(res).id, source: "web" });

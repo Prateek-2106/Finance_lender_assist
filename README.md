@@ -117,3 +117,21 @@ $lead = (Invoke-RestMethod -Method Post "$base/leads" -ContentType "application/
 $d = (Invoke-RestMethod -Method Post "$base/leads/$($lead.id)/draft-estimate" -Headers $k).estimate
 $d.lineItems | Format-Table sku, description, quantity, unitPriceCents; $d.totals; $d.notes; $d.aiDraft.rejected
 ```
+
+## Dashboard (React)
+
+```powershell
+npm run web:build          # builds into dist/web; the API server then serves it
+npm run dev
+```
+- `http://<subdomain>.lvh.me:3000/` is the business's public website, with a quote request form that creates a lead.
+- `http://<subdomain>.lvh.me:3000/app` is the owner dashboard (sign in with the tenant's API key): leads, AI-drafted estimates through invoice and payment, and funding applications with the risk breakdown and memo.
+
+For live editing, run `npm run web:dev` alongside `npm run dev` and open `http://<subdomain>.lvh.me:5173/app`.
+
+### Browser tests (Playwright)
+
+```powershell
+npx playwright install chromium   # once
+npm run e2e                       # builds the app, starts a seeded server with a scripted model, runs e2e/
+```

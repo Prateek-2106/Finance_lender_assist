@@ -5,6 +5,7 @@ export default defineConfig({
   plugins: [react()],
   test: {
     globals: true,
+    include: ["tests/**/*.test.{ts,tsx}"],
     environment: "node",
     // React component tests opt into jsdom with a file-level comment.
     setupFiles: ["./tests/setup.ts"],

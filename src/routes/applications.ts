@@ -23,6 +23,17 @@ export function applicationsRouter({ repos, llm }: Deps) {
     res.status(201).json({ application: await createApplication(repos, getTenant(res), input) });
   });
 
+  r.get("/applications", async (_req, res) => {
+    // The list omits the heavy parts; GET /applications/:id has everything.
+    const list = await repos.applications.listByTenant(getTenant(res).id);
+    res.json({
+      applications: list.map(({ assessment, memo: _memo, ...a }) => ({
+        ...a,
+        ...(assessment ? { summary: { decision: assessment.decision, band: assessment.band, score: assessment.score } } : {}),
+      })),
+    });
+  });
+
   r.get("/applications/:id", async (req, res) => {
     res.json({ application: await getApplication(repos, getTenant(res).id, id(req.params.id)) });
   });

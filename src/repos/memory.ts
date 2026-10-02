@@ -79,6 +79,9 @@ export function createMemoryRepos(): Repos {
         const e = estimates.get(id);
         return e && e.tenantId === tenantId ? clone(e) : null;
       },
+      async listByTenant(tenantId, opts = {}) {
+        return [...estimates.values()].filter((e) => e.tenantId === tenantId).reverse().slice(0, opts.limit ?? 50).map(clone);
+      },
       async update(tenantId, id, patch) {
         const e = estimates.get(id);
         if (!e || e.tenantId !== tenantId) throw new NotFoundError("Estimate not found");
@@ -123,6 +126,9 @@ export function createMemoryRepos(): Repos {
       async findById(tenantId, id) {
         const a = applications.get(id);
         return a && a.tenantId === tenantId ? clone(a) : null;
+      },
+      async listByTenant(tenantId, opts = {}) {
+        return [...applications.values()].filter((a) => a.tenantId === tenantId).reverse().slice(0, opts.limit ?? 50).map(clone);
       },
       async update(tenantId, id, patch) {
         const a = applications.get(id);

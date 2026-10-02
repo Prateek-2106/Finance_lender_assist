@@ -31,6 +31,8 @@ export interface LeadRepo {
 export interface EstimateRepo {
   create(input: NewEstimate): Promise<Estimate>;
   findById(tenantId: Id, id: Id): Promise<Estimate | null>;
+  /** Newest first. */
+  listByTenant(tenantId: Id, opts?: { limit?: number }): Promise<Estimate[]>;
   update(tenantId: Id, id: Id, patch: Partial<NewEstimate>): Promise<Estimate>;
 }
 
@@ -46,6 +48,8 @@ export interface InvoiceRepo {
 export interface ApplicationRepo {
   create(input: NewApplication): Promise<FundingApplication>;
   findById(tenantId: Id, id: Id): Promise<FundingApplication | null>;
+  /** Newest first. */
+  listByTenant(tenantId: Id, opts?: { limit?: number }): Promise<FundingApplication[]>;
   update(tenantId: Id, id: Id, patch: Partial<NewApplication>): Promise<FundingApplication>;
 }
 

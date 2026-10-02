@@ -97,6 +97,10 @@ export async function createMongoRepos(db: Db): Promise<Repos> {
       async findById(tenantId, id) {
         return fromDoc(await estimates.findOne({ _id: id, tenantId }));
       },
+      async listByTenant(tenantId, opts = {}) {
+        const docs = await estimates.find({ tenantId }).sort({ _id: -1 }).limit(opts.limit ?? 50).toArray();
+        return docs.map((d) => fromDoc(d)!);
+      },
       async update(tenantId, id, patch) {
         const d = await estimates.findOneAndUpdate({ _id: id, tenantId }, { $set: patch }, { returnDocument: "after" });
         if (!d) throw new NotFoundError("Estimate not found");
@@ -137,6 +141,10 @@ export async function createMongoRepos(db: Db): Promise<Repos> {
       },
       async findById(tenantId, id) {
         return fromDoc(await applications.findOne({ _id: id, tenantId }));
+      },
+      async listByTenant(tenantId, opts = {}) {
+        const docs = await applications.find({ tenantId }).sort({ _id: -1 }).limit(opts.limit ?? 50).toArray();
+        return docs.map((d) => fromDoc(d)!);
       },
       async update(tenantId, id, patch) {
         const d = await applications.findOneAndUpdate({ _id: id, tenantId }, { $set: patch }, { returnDocument: "after" });

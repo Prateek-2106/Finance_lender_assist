@@ -9,7 +9,10 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "sms:simulate": "tsx scripts/simulate-sms.ts",
-    "fixtures": "tsx fixtures/write.ts"
+    "fixtures": "tsx fixtures/write.ts",
+    "web:dev": "vite --config web/vite.config.ts",
+    "web:build": "vite build --config web/vite.config.ts",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "csv-parse": "^7.0.3",
@@ -21,6 +24,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.7",

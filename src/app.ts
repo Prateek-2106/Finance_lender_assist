@@ -1,5 +1,7 @@
 // Wires every module's router together. Read it to see the request flow.
 import express from "express";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import type { Deps } from "./deps";
 import { tenantsRouter } from "./routes/tenants"; // step 2
 import { errorHandler, notFoundHandler } from "./http/errorHandler"; // step 2
@@ -25,6 +27,13 @@ export function createApp(deps: Deps) {
 
   // Everything below is tenant-scoped: the tenant comes from the Host header
   app.use("/api", resolveTenant(deps), leadsRouter(deps), estimatesRouter(deps), applicationsRouter(deps), domainsRouter(deps));
+
+  // The built React app (npm run web:build): "/" is the tenant's website, "/app" the owner dashboard.
+  const webDir = resolve(process.cwd(), "dist/web");
+  if (existsSync(webDir)) {
+    app.use(express.static(webDir, { index: false }));
+    app.get(/^\/(app(\/.*)?)?$/, (_req, res) => res.sendFile(resolve(webDir, "index.html")));
+  }
 
   app.use(notFoundHandler);
   app.use(errorHandler);
