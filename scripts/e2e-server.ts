@@ -9,6 +9,7 @@ import express from "express";
 
 export const E2E_KEY = "sk_e2e_dashboard_key_0000000000000000";
 export const E2E_UW_KEY = "uw_e2e_priya_000000000";
+export const E2E_DEMO_UW_KEY = "uw_e2e_demo_public_00";
 
 // Emails are recorded, not sent; tests read them from /__test/emails.
 const outbox: (Omit<OutgoingEmail, "attachments"> & { attachments: string[] })[] = [];
@@ -63,7 +64,11 @@ const app = createApp({
     baseDomain: "lvh.me",
     publicUrl: `http://localhost:${PORT}`,
     twilioAuthToken: "e2e",
-    underwriters: [{ name: "Priya Shah", keyHash: hashApiKey(E2E_UW_KEY) }],
+    underwriters: [
+      { name: "Priya Shah", keyHash: hashApiKey(E2E_UW_KEY) },
+      { name: "Demo underwriter", keyHash: hashApiKey(E2E_DEMO_UW_KEY), demoOnly: true },
+    ],
+    demo: { enabled: true, ttlDays: 3, underwriterKey: E2E_DEMO_UW_KEY },
   },
 });
 const outer = express();

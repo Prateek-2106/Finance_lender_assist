@@ -13,6 +13,7 @@ import { useHash } from "../app/useHash";
 type Row = {
   id: string;
   business: string;
+  subdomain: string | null;
   industry: string;
   amountRequestedCents: number;
   engine: { decision: string; band: string; score: number } | null;
@@ -31,15 +32,16 @@ const OUTCOME: Record<string, string> = { approved: "approve", declined: "declin
 /** OPF-side staff: one queue across every business, and a named person on every hand decision. */
 export function Console() {
   const [me, setMe] = useState<string | null>(null);
+  const [demoOnly, setDemoOnly] = useState(false);
   const [checked, setChecked] = useState(false);
   const [parts, go] = useHash();
   useEffect(() => {
     document.title = "Underwriting · Mainstreet";
     if (!uwSession.get()) return setChecked(true);
-    uw<{ name: string }>("/me").then((r) => setMe(r.name), () => uwSession.clear()).finally(() => setChecked(true));
+    uw<{ name: string; demoOnly?: boolean }>("/me").then((r) => { setMe(r.name); setDemoOnly(!!r.demoOnly); }, () => uwSession.clear()).finally(() => setChecked(true));
   }, []);
   if (!checked) return null;
-  if (!me) return <SignIn onDone={setMe} />;
+  if (!me) return <SignIn onDone={(r) => { setMe(r.name); setDemoOnly(!!r.demoOnly); }} />;
   return (
     <div className="shell">
       <aside className="rail">
@@ -48,18 +50,26 @@ export function Console() {
         <div className="small quiet">Signed in as <strong style={{ color: "var(--ink)" }}>{me}</strong></div>
         <button className="secondary small" onClick={() => { uwSession.clear(); setMe(null); }}>Sign out</button>
       </aside>
-      <main><Queue selected={parts[1]} go={go} /></main>
+      <main>
+        {demoOnly && (
+          <aside className="demo-banner" aria-label="Demo underwriter">
+            <p><strong>Demo underwriter.</strong> You see demo businesses only. Pick the case waiting for review, read why the scorecard couldn't decide, and approve or decline it with a note.</p>
+            {location.hostname.startsWith("demo-") && <a className="button secondary small" href="/app#/funding">Back to the business</a>}
+          </aside>
+        )}
+        <Queue selected={parts[1]} go={go} />
+      </main>
     </div>
   );
 }
 
-function SignIn({ onDone }: { onDone: (name: string) => void }) {
+function SignIn({ onDone }: { onDone: (me: { name: string; demoOnly?: boolean }) => void }) {
   const [error, setError] = useState<unknown>(null);
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     uwSession.set(String(new FormData(e.currentTarget).get("key") ?? "").trim());
     try {
-      onDone((await uw<{ name: string }>("/me")).name);
+      onDone(await uw<{ name: string; demoOnly?: boolean }>("/me"));
     } catch (err) {
       uwSession.clear();
       setError(err);
@@ -80,7 +90,16 @@ function SignIn({ onDone }: { onDone: (name: string) => void }) {
 function Queue({ selected, go }: { selected?: string; go: (p: string) => void }) {
   const [q, setQ] = useState<{ pending: Row[]; recent: Row[] } | null>(null);
   const [error, setError] = useState<unknown>(null);
-  const reload = useCallback(() => uw<{ pending: Row[]; recent: Row[] }>("/queue").then(setQ, setError), []);
+  // Opened from a demo business: its own cases first, marked, since every visitor's demo has the same name.
+  const mine = (r: Row) => !!r.subdomain && location.hostname.startsWith(`${r.subdomain}.`);
+  const reload = useCallback(
+    () =>
+      uw<{ pending: Row[]; recent: Row[] }>("/queue").then((r) => {
+        const first = (xs: Row[]) => [...xs.filter(mine), ...xs.filter((x) => !mine(x))];
+        setQ({ pending: first(r.pending), recent: first(r.recent) });
+      }, setError),
+    [],
+  );
   useEffect(() => void reload(), [reload]);
   if (!q) return <ErrorText error={error} />;
   const table = (rows: Row[], pending: boolean) => (
@@ -89,7 +108,7 @@ function Queue({ selected, go }: { selected?: string; go: (p: string) => void })
       <tbody>
         {rows.map((r) => (
           <tr key={r.id} className={`clickable${r.id === selected ? " selected" : ""}`} onClick={() => go(`app/${r.id}`)}>
-            <td>{r.business}<div className="quiet small">{r.industry}{r.engine ? `, band ${r.engine.band}, ${r.engine.score}` : ""}</div></td>
+            <td>{r.business}{mine(r) && <span className="badge">Yours</span>}<div className="quiet small">{r.industry}{r.engine ? `, band ${r.engine.band}, ${r.engine.score}` : ""}</div></td>
             <td className="num">{dollars(r.amountRequestedCents)}</td>
             <td className="small">
               {pending ? day(r.waitingSince!) : (

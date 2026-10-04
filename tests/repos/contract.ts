@@ -194,6 +194,14 @@ export function repoContract(name: string, makeRepos: () => Promise<Repos>) {
       });
     });
 
+    describe("usage counters", () => {
+      it("count up atomically per key", async () => {
+        const all = await Promise.all(Array.from({ length: 5 }, () => repos.usage.increment("ai:2026-10-04")));
+        expect([...all].sort()).toEqual([1, 2, 3, 4, 5]);
+        expect(await repos.usage.increment("ai:2026-10-05")).toBe(1);
+      });
+    });
+
     describe("customers", () => {
       it("the same email or phone is the same customer; details refresh and visits count", async () => {
         const a = await repos.customers.upsertByContact("t1", { name: "Ann", email: "ann@x.co" });
@@ -228,6 +236,12 @@ export function repoContract(name: string, makeRepos: () => Promise<Repos>) {
         expect(list.map((m) => m.template)).toEqual(["b", "a"]);
         expect(list[1]!.status).toBe("sent");
         expect(list[1]!.sentAt).toBeInstanceOf(Date);
+      });
+
+      it("finds one message only within its own business", async () => {
+        const m = await repos.messages.create({ tenantId: "t1", template: "a", subject: "A", status: "skipped", preview: { html: "<p>hi</p>" } });
+        expect((await repos.messages.findById("t1", m.id))?.preview?.html).toBe("<p>hi</p>");
+        expect(await repos.messages.findById("t2", m.id)).toBeNull();
       });
     });
 

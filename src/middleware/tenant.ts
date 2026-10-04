@@ -29,6 +29,8 @@ export function resolveTenant(deps: Deps): RequestHandler {
     // would believe a client-supplied header and let anyone pick another business's tenant.
     const tenant = await tenantForHost(deps, req.get("host") ?? "");
     if (!tenant) throw new NotFoundError("Unknown site");
+    if (tenant.demo && new Date(tenant.demo.expiresAt) < new Date())
+      throw new NotFoundError("This demo business has expired. Start a new one from the homepage.");
     res.locals.tenant = tenant;
     next();
   };

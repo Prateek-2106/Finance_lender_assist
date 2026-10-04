@@ -1,16 +1,22 @@
 import { useEffect, useState } from "react";
-import type { Customer, Lead } from "../../src/domain";
+import type { Customer, Estimate, Lead } from "../../src/domain";
 import { api, day } from "../api";
-import { ErrorText } from "../ui/bits";
+import { ErrorText, Status } from "../ui/bits";
 
 export function Leads({ go }: { go: (path: string) => void }) {
   const [leads, setLeads] = useState<Lead[] | null>(null);
   const [drafting, setDrafting] = useState<string | null>(null);
   const [customers, setCustomers] = useState<Map<string, Customer>>(new Map());
+  const [latest, setLatest] = useState<Map<string, Estimate>>(new Map()); // newest estimate per lead
   const [error, setError] = useState<unknown>(null);
 
   useEffect(() => {
     api<{ leads: Lead[] }>("/leads").then((r) => setLeads(r.leads), setError);
+    api<{ estimates: Estimate[] }>("/estimates").then((r) => {
+      const m = new Map<string, Estimate>();
+      for (const e of r.estimates) if (e.leadId && !m.has(e.leadId)) m.set(e.leadId, e); // list is newest first
+      setLatest(m);
+    }, () => {});
     api<{ customers: Customer[] }>("/customers").then((r) => setCustomers(new Map(r.customers.map((c) => [c.id, c]))), () => {});
   }, []);
 
@@ -59,9 +65,15 @@ export function Leads({ go }: { go: (path: string) => void }) {
                 <td style={{ maxWidth: "36rem" }}>{l.message}</td>
                 <td className="quiet small">{day(l.createdAt)}</td>
                 <td className="num">
-                  <button className="secondary" disabled={drafting === l.id} onClick={() => draft(l)}>
-                    {drafting === l.id ? "Drafting…" : "Draft estimate"}
-                  </button>
+                  {latest.has(l.id) ? (
+                    <a href={`#/estimates/${latest.get(l.id)!.id}`} className="small" aria-label={`Open estimate for ${l.name}`}>
+                      <Status value={latest.get(l.id)!.status} />
+                    </a>
+                  ) : (
+                    <button className="secondary" disabled={drafting === l.id} onClick={() => draft(l)}>
+                      {drafting === l.id ? "Drafting…" : "Draft estimate"}
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

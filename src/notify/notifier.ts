@@ -14,6 +14,8 @@ export function tenantUrl(config: Config, t: Pick<Tenant, "subdomain">, path = "
   return `${u.protocol}//${t.subdomain}.${base}${port}${path}`;
 }
 
+export const DEMO_SKIP = "demo business: shown here, not sent";
+
 /**
  * Sends the email for each stage of the pipeline and logs every attempt in `messages`.
  * Sending happens after the response: a slow or failing mail server never breaks the
@@ -31,12 +33,19 @@ export class Notifier {
     while (this.pending.size) await Promise.allSettled([...this.pending]);
   }
 
-  private deliver(tenantId: string, template: string, to: string | undefined, relatedId: string, build: () => Promise<Rendered & Pick<OutgoingEmail, "attachments">>) {
+  private deliver(t: Tenant, template: string, to: string | undefined, relatedId: string, build: () => Promise<Rendered & Pick<OutgoingEmail, "attachments">>) {
     const job = (async () => {
       let subject = template;
       try {
         const r = await build();
         subject = r.subject;
+        const tenantId = t.id;
+        // Demo businesses run every stage but never email anyone: the message is kept so the
+        // visitor can open it in the dashboard instead (otherwise strangers could aim mail at anyone).
+        if (t.demo) {
+          await this.repos.messages.create({ tenantId, template, subject, relatedId, status: "skipped", ...(to ? { to } : {}), error: DEMO_SKIP, preview: { html: r.html } });
+          return;
+        }
         const skip = !to ? "no email address on file" : !this.mailer ? "email is turned off (MAIL_TRANSPORT=none)" : undefined;
         const msg = await this.repos.messages.create({ tenantId, template, subject, relatedId, status: skip ? "skipped" : "queued", ...(to ? { to } : {}), ...(skip ? { error: skip } : {}) });
         if (skip) return;
@@ -58,30 +67,30 @@ export class Notifier {
 
   leadReceived(t: Tenant, lead: Lead) {
     return Promise.all([
-      this.deliver(t.id, "lead_received_customer", lead.email, lead.id, async () => templates.leadReceivedCustomer(t, lead)),
-      this.deliver(t.id, "lead_received_owner", t.ownerEmail, lead.id, async () => templates.leadReceivedOwner(t, lead, tenantUrl(this.config, t, "/app#/leads"))),
+      this.deliver(t, "lead_received_customer", lead.email, lead.id, async () => templates.leadReceivedCustomer(t, lead)),
+      this.deliver(t, "lead_received_owner", t.ownerEmail, lead.id, async () => templates.leadReceivedOwner(t, lead, tenantUrl(this.config, t, "/app#/leads"))),
     ]);
   }
 
   estimateSent(t: Tenant, e: Estimate) {
-    return this.deliver(t.id, "estimate_sent", e.customer?.email, e.id, async () => templates.estimateSent(t, e));
+    return this.deliver(t, "estimate_sent", e.customer?.email, e.id, async () => templates.estimateSent(t, e));
   }
 
   invoiceIssued(t: Tenant, inv: Invoice) {
-    return this.deliver(t.id, "invoice_issued", inv.billTo?.email, inv.id, async () => ({
+    return this.deliver(t, "invoice_issued", inv.billTo?.email, inv.id, async () => ({
       ...templates.invoiceIssued(t, inv),
       attachments: [{ filename: `${inv.number}.pdf`, content: await renderInvoicePdf(inv, t), contentType: "application/pdf" }],
     }));
   }
 
   paymentReceived(t: Tenant, inv: Invoice, receipt: Receipt) {
-    return this.deliver(t.id, "payment_receipt", inv.billTo?.email, inv.id, async () => templates.paymentReceipt(t, receipt));
+    return this.deliver(t, "payment_receipt", inv.billTo?.email, inv.id, async () => templates.paymentReceipt(t, receipt));
   }
 
   async fundingDecision(app: FundingApplication) {
     const t = await this.repos.tenants.findById(app.tenantId);
     if (!t) return;
-    return this.deliver(t.id, `funding_${app.decision?.outcome ?? "update"}`, t.ownerEmail, app.id, async () =>
+    return this.deliver(t, `funding_${app.decision?.outcome ?? "update"}`, t.ownerEmail, app.id, async () =>
       templates.fundingDecision(t, app, applicantView(app), tenantUrl(this.config, t, `/app#/funding/${app.id}`)),
     );
   }

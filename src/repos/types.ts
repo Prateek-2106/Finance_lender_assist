@@ -3,9 +3,10 @@
 import type { BankTransaction, Contact, Customer, Estimate, FundingApplication, FundingDecision, Id, Invoice, Lead, Message, MessageStatus, Tenant, TxnCategory } from "../domain";
 
 export type NewTenant = Omit<Tenant, "id" | "createdAt">;
-export type NewLead = Omit<Lead, "id" | "createdAt">;
-export type NewEstimate = Omit<Estimate, "id" | "createdAt">;
-export type NewInvoice = Omit<Invoice, "id" | "createdAt">;
+/** `createdAt` may be set explicitly only to seed history (demo businesses); normal code lets the repo stamp it. */
+export type NewLead = Omit<Lead, "id" | "createdAt"> & { createdAt?: Date };
+export type NewEstimate = Omit<Estimate, "id" | "createdAt"> & { createdAt?: Date };
+export type NewInvoice = Omit<Invoice, "id" | "createdAt"> & { createdAt?: Date };
 export type NewApplication = Omit<FundingApplication, "id" | "createdAt">;
 export type NewTransaction = Omit<BankTransaction, "id" | "createdAt">;
 export type NewMessage = Omit<Message, "id" | "createdAt">;
@@ -80,8 +81,14 @@ export interface CustomerRepo {
 export interface MessageRepo {
   create(input: NewMessage): Promise<Message>;
   setStatus(id: Id, status: MessageStatus, extra?: { error?: string; sentAt?: Date }): Promise<void>;
+  findById(tenantId: Id, id: Id): Promise<Message | null>;
   /** Newest first. */
   listByTenant(tenantId: Id, opts?: { limit?: number }): Promise<Message[]>;
+}
+
+export interface UsageRepo {
+  /** Atomically adds 1 to a named counter and returns the new value (e.g. "ai:2026-10-04"). */
+  increment(key: string): Promise<number>;
 }
 
 export interface Repos {
@@ -93,4 +100,5 @@ export interface Repos {
   transactions: TransactionRepo;
   customers: CustomerRepo;
   messages: MessageRepo;
+  usage: UsageRepo;
 }

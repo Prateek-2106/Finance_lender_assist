@@ -14,12 +14,15 @@ import { applicationsRouter } from "./routes/applications"; // steps 6–7
 import { underwritingRouter } from "./routes/underwriting"; // step 11
 import { ownerRouter } from "./routes/owner"; // step 11
 import { Notifier } from "./notify/notifier"; // step 11
+import { platformRouter } from "./routes/platform"; // step 12
 
 export function createApp(deps: Deps) {
   const app = express();
   const notifier = new Notifier(deps.repos, deps.config, deps.mailer);
   app.locals.notifier = notifier; // tests await notifier.idle() before checking emails
-  app.set("trust proxy", true); // behind ALB/CloudFront in prod (step 10)
+  // How many proxies sit in front of us (CloudFront = 1, CloudFront + ALB = 2). A count, never `true`:
+  // with `true`, req.ip is whatever the visitor writes in X-Forwarded-For, and rate limits mean nothing.
+  app.set("trust proxy", deps.config.trustProxyHops ?? 0);
   app.use(express.json({ limit: "100kb" }));
 
   app.get("/health", (_req, res) => {
@@ -28,6 +31,7 @@ export function createApp(deps: Deps) {
 
   // Platform-level routes (no tenant from the Host header)
   app.use("/api/tenants", tenantsRouter(deps));
+  app.use("/api", platformRouter(deps)); // /api/platform, /api/demo (step 12)
   app.use("/webhooks", webhooksRouter(deps, notifier));
   app.use("/api/underwriting", underwritingRouter(deps, notifier)); // OPF-side staff, across all businesses
 

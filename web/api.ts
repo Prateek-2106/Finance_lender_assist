@@ -11,6 +11,17 @@ export const session = keyStore("mainstreet.apiKey");
 /** An underwriter's key, for the platform-wide console. Kept separately on purpose. */
 export const uwSession = keyStore("mainstreet.underwriterKey");
 
+/**
+ * "#key=sk_…" in the address (the "Try it" button, the demo underwriter link): keep the key for
+ * this tab and take it out of the address bar, so it isn't bookmarked, shared or left in history.
+ */
+export function takeKeyFromHash(store: ReturnType<typeof keyStore>, next = "#/") {
+  const m = /^#key=([\w-]+)/.exec(location.hash);
+  if (!m) return;
+  store.set(m[1]!);
+  history.replaceState(null, "", `${location.pathname}${location.search}${next}`);
+}
+
 export class ApiError extends Error {
   constructor(message: string, readonly status: number, readonly issues?: { path?: string; line?: number; message: string }[]) {
     super(message);

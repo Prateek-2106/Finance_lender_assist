@@ -35,6 +35,7 @@ export interface Tenant {
   priceList: PriceItem[];
   taxRateBps: number;
   ownerEmail?: string; // where new-lead and funding emails go
+  demo?: { expiresAt: Date }; // a throwaway business created from the homepage: emails are shown, never sent
   apiKeyHash: string; // sha256 of the owner API key — never return this from the API
   createdAt: Date;
 }
@@ -168,6 +169,7 @@ export interface Message {
   status: MessageStatus;
   error?: string; // why it failed or was skipped
   relatedId?: Id; // the lead, estimate, invoice or application it's about
+  preview?: { html: string }; // demo businesses only: the email as it would have looked
   createdAt: Date;
   sentAt?: Date;
 }

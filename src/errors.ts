@@ -26,3 +26,9 @@ export class ForbiddenError extends Error {
 export class ServiceUnavailableError extends Error {
   readonly status = 503;
 }
+export class TooManyRequestsError extends Error {
+  readonly status = 429;
+  constructor(message: string, readonly retryAfterSeconds?: number) {
+    super(message);
+  }
+}

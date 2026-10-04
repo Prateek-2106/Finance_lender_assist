@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, session } from "../api";
+import { api, day, session } from "../api";
 import { ErrorText } from "../ui/bits";
 import { useHash } from "./useHash";
 import { Leads } from "./Leads";
@@ -51,6 +51,7 @@ export function Dashboard() {
         </button>
       </aside>
       <main>
+        <DemoBanner />
         {section === "leads" && <Leads go={go} />}
         {section === "estimates" && <Estimates selected={parts[1]} go={go} />}
         {section === "funding" && <Funding selected={parts[1]} go={go} />}
@@ -91,5 +92,28 @@ function SignIn({ name, onDone }: { name?: string; onDone: () => void }) {
         </div>
       </form>
     </div>
+  );
+}
+
+/** Demo businesses say so on every screen, and point the visitor at the other side of the product. */
+function DemoBanner() {
+  const [demo, setDemo] = useState<{ expiresAt: string } | null>(null);
+  const [uwKey, setUwKey] = useState<string | null>(null);
+  useEffect(() => {
+    api<{ settings: { demo: { expiresAt: string } | null } }>("/settings").then((r) => setDemo(r.settings.demo), () => {});
+    api<{ platform: { demo: { underwriterKey: string | null } | null } }>("/platform").then((r) => setUwKey(r.platform.demo?.underwriterKey ?? null), () => {});
+  }, []);
+  if (!demo) return null;
+  return (
+    <aside className="demo-banner" aria-label="Demo business">
+      <p>
+        <strong>Demo business.</strong> Everyone and everything here is made up. Emails are kept under Insights, never sent. Expires {day(demo.expiresAt)}.
+      </p>
+      {uwKey && (
+        <a className="button secondary small" href={`/underwriting#key=${uwKey}`} target="_blank" rel="noopener">
+          Open the underwriter console
+        </a>
+      )}
+    </aside>
   );
 }

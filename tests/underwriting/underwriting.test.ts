@@ -24,7 +24,7 @@ describe("underwriter sign-in", () => {
     const { app, metro } = await setup();
     expect((await request(app).get("/api/underwriting/queue")).status).toBe(401);
     expect((await request(app).get("/api/underwriting/queue").set("Authorization", `Bearer ${metro.apiKey}`)).status).toBe(403);
-    expect((await request(app).get("/api/underwriting/me").set(asUnderwriter())).body).toEqual({ name: "Priya Shah" });
+    expect((await request(app).get("/api/underwriting/me").set(asUnderwriter())).body).toEqual({ name: "Priya Shah", demoOnly: false });
   });
 });
 

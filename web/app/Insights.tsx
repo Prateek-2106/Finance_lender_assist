@@ -21,7 +21,8 @@ const TEMPLATE_WORDS: Record<string, string> = {
 /** What happens after "payment recorded": the pipeline read back as numbers. */
 export function Insights() {
   const [s, setS] = useState<Insights | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<(Message & { hasPreview?: boolean })[]>([]);
+  const [viewing, setViewing] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   useEffect(() => {
     api<{ insights: Insights }>("/insights").then((r) => setS(r.insights), setError);
@@ -87,6 +88,7 @@ export function Insights() {
         </details>
       </section>
 
+      {viewing && <EmailPreview id={viewing} onClose={() => setViewing(null)} />}
       <NotificationEmail />
 
       <section className="panel" aria-label="Emails sent">
@@ -95,7 +97,7 @@ export function Insights() {
           <p className="empty">Nothing sent yet. Emails go out when a request comes in, and when you send an estimate, issue an invoice or record a payment.</p>
         ) : (
           <table>
-            <thead><tr><th>When</th><th>What</th><th>To</th><th>Result</th></tr></thead>
+            <thead><tr><th>When</th><th>What</th><th>To</th><th>Result</th><th></th></tr></thead>
             <tbody>
               {messages.map((m) => (
                 <tr key={m.id}>
@@ -103,6 +105,7 @@ export function Insights() {
                   <td>{TEMPLATE_WORDS[m.template] ?? m.template}</td>
                   <td className="small">{m.to ?? "-"}</td>
                   <td className="small">{m.status === "sent" ? "Sent" : m.status === "skipped" ? `Not sent: ${m.error}` : m.status === "failed" ? `Failed: ${m.error}` : "Sending"}</td>
+                  <td>{m.hasPreview && <button className="secondary small" onClick={() => setViewing(m.id)} aria-label={`View email: ${m.subject}`}>View</button>}</td>
                 </tr>
               ))}
             </tbody>
@@ -142,5 +145,32 @@ function NotificationEmail() {
       </div>
       <ErrorText error={error} />
     </form>
+  );
+}
+
+/** The email exactly as it would have gone out, in a sandboxed frame (no scripts, no same-origin access). */
+function EmailPreview({ id, onClose }: { id: string; onClose: () => void }) {
+  const [m, setM] = useState<Message | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  useEffect(() => {
+    api<{ message: Message }>(`/messages/${id}`).then((r) => setM(r.message), setError);
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    addEventListener("keydown", esc);
+    return () => removeEventListener("keydown", esc);
+  }, [id, onClose]);
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" role="dialog" aria-modal="true" aria-label="Email preview" onClick={(e) => e.stopPropagation()}>
+        <div className="row" style={{ justifyContent: "space-between" }}>
+          <div className="contact">
+            <strong style={{ fontSize: "var(--step-0)" }}>{m?.subject ?? "Loading…"}</strong>
+            {m && <span className="quiet">To {m.to ?? "(no address)"} · not sent (demo business)</span>}
+          </div>
+          <button className="secondary small" onClick={onClose} autoFocus>Close</button>
+        </div>
+        <ErrorText error={error} />
+        {m?.preview && <iframe title="Email" sandbox="" srcDoc={m.preview.html} className="email-frame" />}
+      </div>
+    </div>
   );
 }

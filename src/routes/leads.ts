@@ -1,4 +1,6 @@
-import { Router } from "express";
+import { Router, type RequestHandler } from "express";
+import { rateLimit } from "../lib/rateLimit";
+import { spendAiBudget } from "../services/aiBudget";
 import { z } from "zod";
 import type { Deps } from "../deps";
 import { InvalidTransitionError, NotFoundError, ServiceUnavailableError } from "../errors";
@@ -12,8 +14,13 @@ import { LeadCreateSchema, parseOrThrow, PriceListSchema } from "../schemas";
 
 const ListQuery = z.object({ limit: z.coerce.number().int().min(1).max(100).default(50) });
 
-export function leadsRouter({ repos, llm }: Deps, notifier: Notifier) {
+export function leadsRouter(deps: Deps, notifier: Notifier) {
+  const { repos, llm, config } = deps;
   const r = Router();
+  // The contact form is public: limit it per visitor so nobody floods a business's inbox.
+  const leadLimit: RequestHandler = config.rateLimits
+    ? rateLimit({ name: "lead", max: config.rateLimits.leadsPerHour, windowMs: 3_600_000, message: "Too many requests from your network. Please call the business instead." })
+    : (_req, _res, next) => next();
   // Two clicks at once on one lead share one model call (per server process; the
   // open-estimate check below covers clicks that arrive after the first finished).
   const inFlight = new Map<string, Promise<Estimate>>();
@@ -24,7 +31,7 @@ export function leadsRouter({ repos, llm }: Deps, notifier: Notifier) {
     res.json({ site: { name: t.name, subdomain: t.subdomain } });
   });
 
-  r.post("/leads", async (req, res) => {
+  r.post("/leads", leadLimit, async (req, res) => {
     const input = parseOrThrow(LeadCreateSchema, req.body);
     const tenantId = getTenant(res).id;
     const customer = await repos.customers.upsertByContact(tenantId, contactOf(input));
@@ -68,6 +75,7 @@ export function leadsRouter({ repos, llm }: Deps, notifier: Notifier) {
     const first = !job;
     if (!job) {
       job = (async () => {
+        await spendAiBudget(deps, tenant.id);
         const draft = await draftEstimate(llm, tenant.priceList, lead);
         return createEstimate(repos, tenant, {
           leadId: lead.id,

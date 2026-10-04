@@ -14,6 +14,7 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     res.status(400).json({ error: "Malformed JSON body" });
     return;
   }
+  if (typeof err?.retryAfterSeconds === "number") res.set("Retry-After", String(err.retryAfterSeconds));
   const known = typeof err?.status === "number" && ((err.status >= 400 && err.status < 500) || err.status === 502 || err.status === 503);
   const status = known ? err.status : 500;
   if (status === 500) {

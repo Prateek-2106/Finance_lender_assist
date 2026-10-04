@@ -1,10 +1,11 @@
-import { Router } from "express";
+import { Router, type Response } from "express";
 import { z } from "zod";
 import type { Deps } from "../deps";
 import type { FundingApplication, FundingDecision } from "../domain";
 import { ConflictStateError, InvalidTransitionError, NotFoundError, ServiceUnavailableError, ValidationError } from "../errors";
 import { writeMemo } from "../ai/memo";
-import { requireUnderwriter, underwriterName } from "../middleware/underwriter";
+import { spendAiBudget } from "../services/aiBudget";
+import { demoOnly, requireUnderwriter, underwriterName } from "../middleware/underwriter";
 import { parseOrThrow } from "../schemas";
 import { OFFER_TERMS, AFFORDABILITY } from "../risk/config";
 import type { Offer } from "../risk/assess";
@@ -28,16 +29,24 @@ export function underwritingRouter(deps: Deps, notifier: Notifier) {
   const r = Router();
   r.use(requireUnderwriter(deps));
 
-  async function load(id: string): Promise<FundingApplication> {
+  async function load(id: string, res: Response): Promise<FundingApplication> {
     const a = await repos.applications.findByIdAnyTenant(id);
-    if (!a) throw new NotFoundError("Application not found");
+    if (!a || (demoOnly(res) && !(await isDemo(a.tenantId)))) throw new NotFoundError("Application not found");
     return a;
+  }
+  const isDemo = async (tenantId: string) => !!(await repos.tenants.findById(tenantId))?.demo;
+  /** Keeps what this underwriter may see: everything, or only demo businesses for the public demo key. */
+  async function visible(list: FundingApplication[], res: Response) {
+    if (!demoOnly(res)) return list;
+    const flags = await Promise.all(list.map((a) => isDemo(a.tenantId)));
+    return list.filter((_, i) => flags[i]);
   }
   const row = async (a: FundingApplication) => {
     const t = await repos.tenants.findById(a.tenantId);
     return {
       id: a.id,
       business: t?.name ?? "(deleted)",
+      subdomain: t?.subdomain ?? null,
       industry: a.industry,
       amountRequestedCents: a.amountRequestedCents,
       engine: a.assessment ? { decision: a.assessment.decision, band: a.assessment.band, score: a.assessment.score } : null,
@@ -47,21 +56,22 @@ export function underwritingRouter(deps: Deps, notifier: Notifier) {
   };
 
   r.get("/me", (_req, res) => {
-    res.json({ name: underwriterName(res) });
+    res.json({ name: underwriterName(res), demoOnly: demoOnly(res) });
   });
 
   r.get("/queue", async (_req, res) => {
+    const n = demoOnly(res) ? 5 : 1; // demo key: read further back, since real cases are filtered out
     const [pending, approved, declined] = await Promise.all([
-      repos.applications.listByOutcome("pending_review", { limit: 100 }),
-      repos.applications.listByOutcome("approved", { limit: 20 }),
-      repos.applications.listByOutcome("declined", { limit: 20 }),
+      repos.applications.listByOutcome("pending_review", { limit: 100 * n }).then((l) => visible(l, res)),
+      repos.applications.listByOutcome("approved", { limit: 20 * n }).then((l) => visible(l, res)),
+      repos.applications.listByOutcome("declined", { limit: 20 * n }).then((l) => visible(l, res)),
     ]);
     const recent = [...approved, ...declined].sort((x, y) => +new Date(y.decision!.at) - +new Date(x.decision!.at)).slice(0, 20);
     res.json({ pending: await Promise.all(pending.map(row)), recent: await Promise.all(recent.map(row)) });
   });
 
   r.get("/applications/:id", async (req, res) => {
-    const a = await load(String(req.params.id));
+    const a = await load(String(req.params.id), res);
     const tenant = await repos.tenants.findById(a.tenantId);
     // Platform revenue: what this business was actually paid through Mainstreet during the
     // statement period, next to what its bank shows. Context for the underwriter, not a score input.
@@ -79,8 +89,9 @@ export function underwritingRouter(deps: Deps, notifier: Notifier) {
 
   r.post("/applications/:id/memo", async (req, res) => {
     if (!llm) throw new ServiceUnavailableError("No language model configured (set LLM_PROVIDER)");
-    const a = await load(String(req.params.id));
+    const a = await load(String(req.params.id), res);
     if (!a.assessment) throw new InvalidTransitionError("Assess the application before writing a memo");
+    await spendAiBudget(deps, a.tenantId);
     const memo = await writeMemo(llm, a, a.assessment);
     await repos.applications.update(a.tenantId, a.id, { memo });
     res.json({ memo });
@@ -88,7 +99,7 @@ export function underwritingRouter(deps: Deps, notifier: Notifier) {
 
   r.post("/applications/:id/decision", async (req, res) => {
     const input = parseOrThrow(DecisionSchema, req.body);
-    const a = await load(String(req.params.id));
+    const a = await load(String(req.params.id), res);
     if (a.decision?.outcome !== "pending_review")
       throw new ConflictStateError(
         a.decision ? `Already ${a.decision.outcome} (${a.decision.decidedBy.kind === "underwriter" ? a.decision.decidedBy.name : "automatically"})` : "Not assessed yet",

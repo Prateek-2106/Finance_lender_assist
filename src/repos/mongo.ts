@@ -89,7 +89,7 @@ export async function createMongoRepos(db: Db): Promise<Repos> {
     },
     leads: {
       async create(input) {
-        const l: Lead = { ...input, id: newId(), createdAt: new Date() };
+        const l: Lead = { ...input, id: newId(), createdAt: input.createdAt ?? new Date() };
         await leads.insertOne(toDoc(l));
         return l;
       },
@@ -107,7 +107,7 @@ export async function createMongoRepos(db: Db): Promise<Repos> {
     },
     estimates: {
       async create(input) {
-        const e: Estimate = { ...input, id: newId(), createdAt: new Date() };
+        const e: Estimate = { ...input, id: newId(), createdAt: input.createdAt ?? new Date() };
         await estimates.insertOne(toDoc(e));
         return e;
       },
@@ -130,7 +130,7 @@ export async function createMongoRepos(db: Db): Promise<Repos> {
     },
     invoices: {
       async create(input) {
-        const i: Invoice = { ...input, id: newId(), createdAt: new Date() };
+        const i: Invoice = { ...input, id: newId(), createdAt: input.createdAt ?? new Date() };
         await translateDup(invoices.insertOne(toDoc(i)), "Invoice already exists for this estimate");
         return i;
       },
@@ -251,9 +251,18 @@ export async function createMongoRepos(db: Db): Promise<Repos> {
       async setStatus(id, status, extra = {}) {
         await messages.updateOne({ _id: id }, { $set: { status, ...extra } });
       },
+      async findById(tenantId, id) {
+        return fromDoc(await messages.findOne({ _id: id, tenantId }));
+      },
       async listByTenant(tenantId, opts = {}) {
         const docs = await messages.find({ tenantId }).sort({ _id: -1 }).limit(opts.limit ?? 50).toArray();
         return docs.map((d) => fromDoc(d)!);
+      },
+    },
+    usage: {
+      async increment(key) {
+        const c = await counters.findOneAndUpdate({ _id: `usage:${key}` }, { $inc: { seq: 1 } }, { upsert: true, returnDocument: "after" });
+        return c!.seq;
       },
     },
   };

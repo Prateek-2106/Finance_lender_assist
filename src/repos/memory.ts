@@ -16,6 +16,7 @@ export function createMemoryRepos(): Repos {
   const txns: BankTransaction[] = [];
   const customers: Customer[] = [];
   const messages: Message[] = [];
+  const usage = new Map<string, number>();
 
   const hostTaken = (hostname: string | undefined, exceptId?: Id) =>
     !!hostname && [...tenants.values()].some((t) => t.id !== exceptId && t.customDomain?.hostname === hostname);
@@ -56,7 +57,7 @@ export function createMemoryRepos(): Repos {
     },
     leads: {
       async create(input) {
-        const l: Lead = { ...clone(input), id: randomUUID(), createdAt: new Date() };
+        const l: Lead = { ...clone(input), id: randomUUID(), createdAt: input.createdAt ?? new Date() };
         leads.push(l);
         return clone(l);
       },
@@ -74,7 +75,7 @@ export function createMemoryRepos(): Repos {
     },
     estimates: {
       async create(input) {
-        const e: Estimate = { ...clone(input), id: randomUUID(), createdAt: new Date() };
+        const e: Estimate = { ...clone(input), id: randomUUID(), createdAt: input.createdAt ?? new Date() };
         estimates.set(e.id, e);
         return clone(e);
       },
@@ -99,7 +100,7 @@ export function createMemoryRepos(): Repos {
     },
     invoices: {
       async create(input) {
-        const i: Invoice = { ...clone(input), id: randomUUID(), createdAt: new Date() };
+        const i: Invoice = { ...clone(input), id: randomUUID(), createdAt: input.createdAt ?? new Date() };
         invoices.set(i.id, i);
         return clone(i);
       },
@@ -221,8 +222,19 @@ export function createMemoryRepos(): Repos {
         const msg = messages.find((x) => x.id === id);
         if (msg) Object.assign(msg, { status, ...clone(extra) });
       },
+      async findById(tenantId, id) {
+        const msg = messages.find((x) => x.id === id && x.tenantId === tenantId);
+        return msg ? clone(msg) : null;
+      },
       async listByTenant(tenantId, opts = {}) {
         return messages.filter((x) => x.tenantId === tenantId).reverse().slice(0, opts.limit ?? 50).map(clone);
+      },
+    },
+    usage: {
+      async increment(key) {
+        const n = (usage.get(key) ?? 0) + 1;
+        usage.set(key, n);
+        return n;
       },
     },
   };
