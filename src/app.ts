@@ -1,6 +1,7 @@
 // Wires every module's router together. Read it to see the request flow.
 import express from "express";
 import { existsSync } from "node:fs";
+import { timingSafeEqual } from "node:crypto";
 import { resolve } from "node:path";
 import type { Deps } from "./deps";
 import { tenantsRouter } from "./routes/tenants"; // step 2
@@ -29,6 +30,16 @@ export function createApp(deps: Deps) {
     res.json({ ok: true });
   });
 
+  // Behind CloudFront: only requests carrying CloudFront's secret header get in, so nobody can skip the CDN
+  // (and its TLS) by calling the server's address directly. /health above stays open for the container check.
+  const originSecret = deps.config.originSecret;
+  if (originSecret)
+    app.use((req, res, next) => {
+      const got = req.get("x-origin-verify") ?? "";
+      if (got.length === originSecret.length && timingSafeEqual(Buffer.from(got), Buffer.from(originSecret))) return next();
+      res.status(403).json({ error: "Direct access is not allowed" });
+    });
+
   // Platform-level routes (no tenant from the Host header)
   app.use("/api/tenants", tenantsRouter(deps));
   app.use("/api", platformRouter(deps)); // /api/platform, /api/demo (step 12)
@@ -49,6 +60,8 @@ export function createApp(deps: Deps) {
   // The built React app (npm run web:build): "/" is the tenant's website, "/app" the owner dashboard.
   const webDir = resolve(process.cwd(), "dist/web");
   if (existsSync(webDir)) {
+    // Vite puts a content hash in every file name under /assets, so those can be cached for a year.
+    app.use("/assets", express.static(resolve(webDir, "assets"), { immutable: true, maxAge: "365d", fallthrough: false }));
     app.use(express.static(webDir, { index: false }));
     app.get(/^\/((app|underwriting)(\/.*)?)?$/, (_req, res) => res.sendFile(resolve(webDir, "index.html")));
   }

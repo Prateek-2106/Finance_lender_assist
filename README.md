@@ -154,45 +154,80 @@ Until verified, the hostname serves nothing. A verified domain serves the tenant
 docker compose --profile app up --build     # http://<subdomain>.lvh.me:3000, Ollama on your machine
 ```
 
-## Deploy to AWS (ECS Fargate, ALB, ACM, Route 53)
+## Deploy to AWS
 
-Roughly $1–1.50 a day while running (load balancer, one small Fargate task, public IPv4 addresses; approximate). `npm run infra:destroy` removes everything except the domain and its hosted zone ($0.50/month).
+Two profiles, same app:
 
-**One-time setup**
+| | **economy** (default) | **full** (`-c profile=full`) |
+|---|---|---|
+| Path | CloudFront → one EC2 instance (Docker image from ECR) | ALB → ECS Fargate |
+| TLS | CloudFront, `*.domain` cert | ALB, `*.domain` cert |
+| Deploys | GitHub Actions: build → ECR → SSM runs `/opt/mainstreet/run.sh <sha>` | GitHub Actions: `cdk deploy`, rolling with automatic rollback |
+| Cost | about $12/month (t3.micro ~$7.60, Elastic IP ~$3.65, Route 53 $0.50; CloudFront and SES stay in the free tier at demo traffic) | about $35–45/month (ALB alone ~$16 + LCUs) |
+| Trade-off | a deploy restarts the container (a few seconds down); CloudFront → instance is HTTP, limited to CloudFront's address ranges plus a secret header | no single machine; more to pay for |
 
-1. **Domain.** Register one in Route 53 (this creates its hosted zone), then get the zone id:
+Both use Route 53, ACM, SES (DKIM set up automatically), SSM Parameter Store for secrets, CloudWatch Logs and MongoDB Atlas. Prices are approximate, us-east-1.
+
+### One-time setup (economy)
+
+Everything below is PowerShell, from the repo root, with the AWS CLI signed in to the **new** account (`aws configure`, region `us-east-1`).
+
+1. **Domain.** Route 53 → Registered domains → Register (about $14/year for a `.com`). The hosted zone is created for you. Get its id:
    ```powershell
    aws route53 list-hosted-zones-by-name --dns-name yourdomain.com --query "HostedZones[0].Id" --output text   # /hostedzone/Z0123… → use Z0123…
    ```
    Put both in `infra/cdk.json` → `context.domainName` and `context.hostedZoneId`, and commit.
-2. **Database.** Create a free MongoDB Atlas M0 cluster (AWS, us-east-1), a database user, and allow access from `0.0.0.0/0` (Fargate tasks have changing public IPs; production would use PrivateLink or a fixed NAT address). Store the connection string, with `/mainstreet` as the database:
+2. **Database.** MongoDB Atlas → free **M0** cluster on AWS us-east-1 → a database user → Network Access: `0.0.0.0/0` (the instance has a fixed Elastic IP after the first deploy; you can narrow it to that IP then).
+3. **Anthropic.** console.anthropic.com → create an API key → Billing → set a **monthly spend limit** (e.g. $10). The app also caps itself at 300 AI calls a day (25 per business).
+4. **Settings in SSM** (SecureString for secrets; plain String for the origin header CloudFront must read). Don't put quotes inside the values.
    ```powershell
-   aws ssm put-parameter --region us-east-1 --name /mainstreet/MONGO_URL --type SecureString --value "mongodb+srv://USER:PASS@cluster0.xxxxx.mongodb.net/mainstreet?retryWrites=true&w=majority"
+   $p = "/mainstreet"
+   aws ssm put-parameter --name $p/MONGO_URL --type SecureString --value "mongodb+srv://USER:PASS@cluster0.xxxxx.mongodb.net/mainstreet?retryWrites=true&w=majority"
+   aws ssm put-parameter --name $p/ANTHROPIC_API_KEY --type SecureString --value "sk-ant-..."
+   aws ssm put-parameter --name $p/ADMIN_TOKEN --type SecureString --value ([guid]::NewGuid().ToString("N") + [guid]::NewGuid().ToString("N"))
+   aws ssm put-parameter --name $p/UNDERWRITERS --type SecureString --value ("Prateek Ghosh=uw_" + [guid]::NewGuid().ToString("N"))
+   aws ssm put-parameter --name $p/ORIGIN_SECRET --type String --value ([guid]::NewGuid().ToString("N"))
+   # optional: aws ssm put-parameter --name $p/TWILIO_AUTH_TOKEN --type SecureString --value "..."
    ```
-3. **CDK bootstrap** (once per account and region), with Docker Desktop running:
+   Read one back with `aws ssm get-parameter --name /mainstreet/ADMIN_TOKEN --with-decryption --query Parameter.Value --output text`.
+5. **CDK bootstrap**, once per account and region:
    ```powershell
    cd infra; npm ci
    npx cdk bootstrap aws://<ACCOUNT_ID>/us-east-1
    ```
 
-**First deploy, from your laptop** (about 10 minutes; most of it is the certificate being issued)
+### First deploy (about 10–15 minutes: the certificate and CloudFront take most of it)
 ```powershell
-npx cdk deploy      # review the IAM and security-group changes it lists, then confirm
+npx cdk deploy      # profile=economy; review the IAM and security-group changes, then confirm
 ```
-It prints `Url`, `TenantUrlPattern` and `GitHubDeployRoleArn`. If the account already has a GitHub OIDC provider, the deploy fails on it. Add `"githubOidcProviderArn": "arn:aws:iam::<ACCOUNT_ID>:oidc-provider/token.actions.githubusercontent.com"` to the context and deploy again.
+It prints `Url`, `InstanceId`, `RepositoryUri`, `GitHubDeployRoleArn`, `TailLogs` and `Shell`. The instance is up but empty: there's no image yet.
 
-**Check it**
+### Deploys on push
+GitHub → Settings → Secrets and variables → Actions:
+- secret `AWS_DEPLOY_ROLE_ARN` = the `GitHubDeployRoleArn` output
+- variable `DEPLOY` = `economy`
+- variable `INSTANCE_ID` = the `InstanceId` output
+
+Push to `main`. After tests, e2e, the image check and the infra tests pass, `deploy-economy` builds the image, pushes it to ECR tagged with the commit, runs `/opt/mainstreet/run.sh <sha>` on the instance through SSM, and smoke-tests `https://yourdomain.com/health`, `/api/platform`, and that `http://origin.yourdomain.com` refuses direct visitors.
+
+### Check it
+Open `https://yourdomain.com` → **Try it**. To create a real business (sign-up is closed to visitors):
 ```powershell
-$prod = "https://yourdomain.com"
-$t = Invoke-RestMethod -Method Post "$prod/api/tenants" -ContentType "application/json" -Body '{"name":"Joe''s Plumbing","taxRateBps":875}'
-start "https://$($t.tenant.subdomain).yourdomain.com/app"; $t.apiKey
+$admin = aws ssm get-parameter --name /mainstreet/ADMIN_TOKEN --with-decryption --query Parameter.Value --output text
+Invoke-RestMethod -Method Post https://yourdomain.com/api/tenants -Headers @{ Authorization = "Bearer $admin" } -ContentType application/json -Body '{"name":"Joe''s Plumbing","taxRateBps":875}'
 ```
 
-**Deploys on push.** In GitHub → Settings → Secrets and variables → Actions, add the secret `AWS_DEPLOY_ROLE_ARN` (the `GitHubDeployRoleArn` output) and the variable `DEPLOY` = `true`. After that, every push to `main` that passes tests, e2e, the image check and the infra tests deploys itself and smoke-tests `https://yourdomain.com/health`.
+### Run, look, fix
+- Logs: `aws logs tail /mainstreet/web --follow`
+- Shell on the machine (no SSH, no open port 22): `aws ssm start-session --target <InstanceId>` (needs the Session Manager plugin), then `sudo docker ps`, `sudo /opt/mainstreet/run.sh` to restart, `sudo /opt/mainstreet/run.sh <older-sha>` to roll back.
+- Changed a setting in SSM? Restart with `run.sh` so the container reads it again.
+- **Email:** new SES accounts are in the *sandbox*: mail only reaches verified addresses. Demo businesses never send mail anyway. For real mail, SES → Account dashboard → Request production access.
 
-**Logs:** CloudWatch → Log groups → `Mainstreet-Logs…`, or `aws logs tail <group> --follow`.
+### Tear down
+`npx cdk destroy` (in `infra`) removes everything except the domain, its hosted zone and the SSM parameters.
 
-**Tear down:** `npm run infra:destroy`.
+### Full profile instead
+`npx cdk deploy -c profile=full -c llmProvider=anthropic -c underwriters=true`, and set the GitHub variable `DEPLOY` = `full`. CI then runs `cdk deploy` itself on every push.
 
 ## Step 11: review round
 
@@ -214,3 +249,20 @@ Invoke-RestMethod -Method Patch "$base/settings" -Headers $k -ContentType "appli
 **Plain words for the applicant.** The owner sees the decision first: amount, total repayment, daily payment, months, **estimated APR**, and for every reason, what would help. Written by code from the same numbers as the decision. The scoring sits under "How we decided"; the memo stays internal.
 
 **After payment.** Insights shows lead → estimate → accepted → paid conversion, revenue by month, average job, days to get paid, unpaid invoices and returning customers.
+
+## Step 12: public demo ("Try it")
+
+Strangers can't be expected to bring their own data, and shouldn't hand bank statements to a demo. So the homepage at `yourdomain.com` gives each visitor their **own throwaway business**:
+
+- **One click** (`POST /api/demo`) creates *Maple Street Plumbing* at `demo-xxxxxx.yourdomain.com` with six months of history: leads (some repeat customers, two fresh ones to try AI drafting on), estimates in every state, paid and unpaid invoices, and three funding applications scored by the real risk engine from synthetic statements (one approved, one declined, one waiting for a person). The owner key travels in the URL fragment (`/app#key=…`), which browsers never send to servers; the dashboard stores it for the tab and removes it from the address bar.
+- **Emails are never sent** for demo businesses. Each one is kept with its HTML, and Insights → Emails → **View** shows it in a sandboxed frame.
+- **The other side:** a public demo underwriter key (on the homepage) opens the console, but sees and decides **demo businesses only**. The visitor's own case is marked *Yours*.
+- **Expiry:** demos stop working after 3 days and are deleted (with everything they own) by a cleanup that runs every 6 hours.
+
+Guard rails for a public site, all on by default in production (`NODE_ENV=production`):
+- **Sign-up closed** (`OPEN_SIGNUP=false`): creating a real business needs `ADMIN_TOKEN`. Otherwise anyone could claim `yourbank.yourdomain.com`.
+- **AI budget:** every model call is counted in the database: 25 per business and 300 overall per UTC day (`AI_DAILY_LIMIT_PER_BUSINESS`, `AI_DAILY_LIMIT`); over that the API answers 429 without calling the model. The cloud uses Claude Haiku (`ANTHROPIC_MODEL=claude-haiku-4-5-20251001`).
+- **Rate limits per visitor:** 5 demos an hour, 30 website requests an hour (`DEMOS_PER_HOUR`, `LEADS_PER_HOUR`). The visitor is `req.ip`, which is only trustworthy because `trust proxy` is the *number* of proxies in front (`TRUST_PROXY_HOPS=1` for CloudFront), never `true`: with `true`, anyone can type their own `X-Forwarded-For`.
+- **No way around CloudFront:** the instance accepts port 80 only from CloudFront's address ranges, and the app refuses requests without CloudFront's secret `X-Origin-Verify` header (`ORIGIN_SECRET`).
+
+Locally, everything works the same with sign-up open: `npm run dev`, open `http://localhost:3000`, press **Try it** (demo underwriter key `uw_demo_public_0001`). `RATE_LIMITS=on` turns the limits on locally.

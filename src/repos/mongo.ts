@@ -47,6 +47,7 @@ export async function createMongoRepos(db: Db): Promise<Repos> {
       { unique: true, partialFilterExpression: { "customDomain.hostname": { $exists: true } } },
     ),
     leads.createIndex({ tenantId: 1, createdAt: -1, _id: -1 }),
+    tenants.createIndex({ "demo.expiresAt": 1 }, { partialFilterExpression: { "demo.expiresAt": { $exists: true } } }),
     estimates.createIndex({ tenantId: 1, _id: 1 }),
     estimates.createIndex({ tenantId: 1, leadId: 1, status: 1 }),
     invoices.createIndex({ tenantId: 1, estimateId: 1 }, { unique: true }),
@@ -64,6 +65,10 @@ export async function createMongoRepos(db: Db): Promise<Repos> {
 
   return {
     tenants: {
+      async listExpiredDemos(now, opts = {}) {
+        const docs = await tenants.find({ "demo.expiresAt": { $lt: now } }).sort({ "demo.expiresAt": 1 }).limit(opts.limit ?? 100).toArray();
+        return docs.map((d) => fromDoc(d)!);
+      },
       async create(input) {
         const t: Tenant = { ...input, id: newId(), createdAt: new Date() };
         await translateDup(tenants.insertOne(toDoc(t)), "Subdomain or hostname is taken");
@@ -258,6 +263,12 @@ export async function createMongoRepos(db: Db): Promise<Repos> {
         const docs = await messages.find({ tenantId }).sort({ _id: -1 }).limit(opts.limit ?? 50).toArray();
         return docs.map((d) => fromDoc(d)!);
       },
+    },
+    async purgeTenant(tenantId) {
+      // Children first, the tenant last: an interrupted purge leaves a tenant to retry, never orphans.
+      await Promise.all([leads, estimates, invoices, applications, txns, customers, messages].map((c) => (c as typeof leads).deleteMany({ tenantId })));
+      await counters.deleteOne({ _id: `invoice:${tenantId}` });
+      await tenants.deleteOne({ _id: tenantId });
     },
     usage: {
       async increment(key) {

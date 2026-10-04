@@ -212,3 +212,29 @@ describe("rateLimit", () => {
     expect((await request(app).post("/api/demo").set({ "X-Forwarded-For": "203.0.113.8" })).status).toBe(201);
   });
 });
+
+describe("behind CloudFront", () => {
+  it("refuses requests that skip the CDN, but the health check stays open", async () => {
+    const { app } = publicSite({ originSecret: "cf-secret-0123456789" });
+    expect((await request(app).get("/health")).status).toBe(200);
+    expect((await request(app).get("/api/platform")).status).toBe(403);
+    expect((await request(app).get("/api/platform").set("X-Origin-Verify", "wrong")).status).toBe(403);
+    expect((await request(app).get("/api/platform").set("X-Origin-Verify", "cf-secret-0123456789")).status).toBe(200);
+  });
+});
+
+describe("purgeExpiredDemos", () => {
+  it("removes only demos past their expiry", async () => {
+    const { createDemoBusiness } = await import("../../src/services/demo");
+    const { purgeExpiredDemos } = await import("../../src/services/demoCleanup");
+    const repos = createMemoryRepos();
+    const config = { baseDomain: BASE, publicUrl: "https://x", twilioAuthToken: "", demo: { enabled: true, ttlDays: 3 } };
+    const old = await createDemoBusiness({ repos, config }, new Date(Date.now() - 4 * 86_400_000));
+    const fresh = await createDemoBusiness({ repos, config });
+    expect(await purgeExpiredDemos(repos)).toBe(1);
+    expect(await repos.tenants.findById(old.tenant.id)).toBeNull();
+    expect(await repos.applications.listByTenant(old.tenant.id)).toEqual([]);
+    expect(await repos.tenants.findById(fresh.tenant.id)).not.toBeNull();
+    expect(await purgeExpiredDemos(repos)).toBe(0);
+  });
+});

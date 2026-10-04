@@ -1,0 +1,99 @@
+import * as cdk from "aws-cdk-lib";
+import { Match, Template } from "aws-cdk-lib/assertions";
+import { EconomyStack } from "../lib/economy-stack.js";
+
+let t: Template;
+let userData: string;
+beforeAll(() => {
+  const app = new cdk.App();
+  const stack = new EconomyStack(app, "Eco", {
+    env: { account: "123456789012", region: "us-east-1" },
+    domainName: "example-mainstreet.com",
+    hostedZoneId: "Z0000000EXAMPLE",
+    githubRepo: "Prateek-2106/mainstreet",
+  });
+  t = Template.fromStack(stack);
+  const inst = Object.values(t.findResources("AWS::EC2::Instance"))[0] as { Properties: { UserData: unknown } };
+  userData = JSON.stringify(inst.Properties.UserData);
+}, 120_000);
+
+describe("economy profile", () => {
+  it("has no load balancer, NAT gateway or Fargate service", () => {
+    t.resourceCountIs("AWS::ElasticLoadBalancingV2::LoadBalancer", 0);
+    t.resourceCountIs("AWS::EC2::NatGateway", 0);
+    t.resourceCountIs("AWS::ECS::Service", 0);
+    t.resourceCountIs("AWS::EC2::Instance", 1);
+    t.hasResourceProperties("AWS::EC2::Instance", { InstanceType: "t3.micro" });
+  });
+
+  it("serves the domain and every tenant subdomain through CloudFront with one certificate", () => {
+    t.hasResourceProperties("AWS::CertificateManager::Certificate", { DomainName: "example-mainstreet.com", SubjectAlternativeNames: ["*.example-mainstreet.com"] });
+    t.hasResourceProperties("AWS::CloudFront::Distribution", {
+      DistributionConfig: Match.objectLike({
+        Aliases: ["example-mainstreet.com", "*.example-mainstreet.com"],
+        ViewerCertificate: Match.objectLike({ MinimumProtocolVersion: "TLSv1.2_2021", SslSupportMethod: "sni-only" }),
+        DefaultCacheBehavior: Match.objectLike({
+          ViewerProtocolPolicy: "redirect-to-https",
+          CachePolicyId: "4135ea2d-6df8-44a3-9df3-4b5a84be39ad", // Managed-CachingDisabled
+          OriginRequestPolicyId: "216adef6-5c7f-47e4-b989-5492eafa07d3", // Managed-AllViewer: Host and Authorization reach the app
+        }),
+        CacheBehaviors: [Match.objectLike({ PathPattern: "/assets/*", CachePolicyId: "658327ea-f89d-4fab-a63d-7e88639e58f6" })], // CachingOptimized
+      }),
+    });
+    t.hasResourceProperties("AWS::Route53::RecordSet", { Name: "example-mainstreet.com.", Type: "A", AliasTarget: Match.anyValue() });
+    t.hasResourceProperties("AWS::Route53::RecordSet", { Name: "*.example-mainstreet.com.", Type: "A", AliasTarget: Match.anyValue() });
+  });
+
+  it("CloudFront talks to origin.<domain> with a secret header the app checks", () => {
+    t.hasResourceProperties("AWS::CloudFront::Distribution", {
+      DistributionConfig: Match.objectLike({
+        Origins: [Match.objectLike({
+          DomainName: "origin.example-mainstreet.com",
+          CustomOriginConfig: Match.objectLike({ OriginProtocolPolicy: "http-only" }),
+          OriginCustomHeaders: [Match.objectLike({ HeaderName: "X-Origin-Verify" })],
+        })],
+      }),
+    });
+    t.hasResourceProperties("AWS::Route53::RecordSet", { Name: "origin.example-mainstreet.com.", Type: "A" });
+    const params = t.toJSON().Parameters as Record<string, { Default?: string }>;
+    expect(Object.values(params).some((p) => p.Default === "/mainstreet/ORIGIN_SECRET")).toBe(true);
+  });
+
+  it("the machine only accepts HTTP from CloudFront, and has no SSH", () => {
+    t.resourceCountIs("AWS::EC2::SecurityGroupIngress", 1);
+    t.hasResourceProperties("AWS::EC2::SecurityGroupIngress", { IpProtocol: "tcp", FromPort: 80, ToPort: 80, SourcePrefixListId: "pl-3b927c52" });
+    expect(JSON.stringify(t.toJSON())).not.toMatch(/"FromPort":22/);
+    t.hasResourceProperties("AWS::EC2::LaunchTemplate", {
+      LaunchTemplateData: { MetadataOptions: { HttpTokens: "required", HttpPutResponseHopLimit: 2 } },
+    });
+  });
+
+  it("boots into Docker and the run script, with production settings", () => {
+    for (const s of ["dnf install -y docker", "/opt/mainstreet/run.sh", "get-parameters-by-path", "--path /mainstreet/", "TRUST_PROXY_HOPS=1", "OPEN_SIGNUP=false", "ANTHROPIC_MODEL=claude-haiku-4-5-20251001", "MAIL_TRANSPORT=ses", "awslogs-group="])
+      expect(userData).toContain(s);
+  });
+
+  it("the machine can read only /mainstreet/* settings, pull its image and send mail as the domain", () => {
+    t.hasResourceProperties("AWS::IAM::Policy", {
+      PolicyDocument: { Statement: Match.arrayWith([Match.objectLike({ Action: ["ssm:GetParametersByPath", "ssm:GetParameter"], Resource: Match.arrayWith([Match.stringLikeRegexp(":parameter/mainstreet/\\*")]) })]) },
+    });
+    t.hasResourceProperties("AWS::IAM::Policy", {
+      PolicyDocument: { Statement: Match.arrayWith([Match.objectLike({ Action: ["ses:SendEmail", "ses:SendRawEmail"] })]) },
+    });
+    t.hasResourceProperties("AWS::ECR::Repository", { RepositoryName: "mainstreet", LifecyclePolicy: Match.anyValue() });
+  });
+
+  it("GitHub on main may push the image and run the deploy command on this one machine, nothing else", () => {
+    t.hasResourceProperties("AWS::IAM::Role", {
+      AssumeRolePolicyDocument: { Statement: [Match.objectLike({ Condition: Match.objectLike({ StringLike: { "token.actions.githubusercontent.com:sub": "repo:Prateek-2106/mainstreet:ref:refs/heads/main" } }) })] },
+    });
+    const policies = JSON.stringify(t.findResources("AWS::IAM::Policy"));
+    expect(policies).toContain("ssm:SendCommand");
+    expect(policies).toContain("document/AWS-RunShellScript");
+    expect(policies).not.toContain('"Action":"*"');
+  });
+
+  it("refuses regions other than us-east-1 (CloudFront certificates live there)", () => {
+    expect(() => new EconomyStack(new cdk.App(), "X", { env: { account: "123456789012", region: "eu-west-1" }, domainName: "x.com", hostedZoneId: "Z1" })).toThrow(/us-east-1/);
+  });
+});

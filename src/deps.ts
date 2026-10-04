@@ -18,6 +18,8 @@ export interface Config {
   rateLimits?: { leadsPerHour: number; demosPerHour: number };
   /** Proxies in front of the app (CloudFront = 1). Decides which X-Forwarded-For entry is the visitor. */
   trustProxyHops?: number;
+  /** CloudFront adds this as X-Origin-Verify; requests without it are refused. */
+  originSecret?: string;
   /** Shown on the homepage. */
   site?: { author?: string; repoUrl?: string };
 }

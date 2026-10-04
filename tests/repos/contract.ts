@@ -245,6 +245,40 @@ export function repoContract(name: string, makeRepos: () => Promise<Repos>) {
       });
     });
 
+    describe("demo cleanup", () => {
+      it("lists expired demos and purges a business with everything it owns, leaving others alone", async () => {
+        const mk = (sub: string, expiresAt?: Date) =>
+          repos.tenants.create({ name: sub, subdomain: sub, taxRateBps: 0, priceList: [], apiKeyHash: "h", ...(expiresAt ? { demo: { expiresAt } } : {}) });
+        const old = await mk("demo-old", new Date("2026-01-01"));
+        const fresh = await mk("demo-new", new Date("2099-01-01"));
+        const real = await mk("real-biz");
+        expect((await repos.tenants.listExpiredDemos(new Date("2026-06-01"))).map((t) => t.subdomain)).toEqual(["demo-old"]);
+
+        for (const t of [old, real]) {
+          const lead = await repos.leads.create({ tenantId: t.id, name: "A", message: "m", source: "web" });
+          await repos.customers.upsertByContact(t.id, { name: "A", email: "a@x.co" });
+          await repos.messages.create({ tenantId: t.id, template: "x", subject: "x", status: "skipped" });
+          const e = await repos.estimates.create({ tenantId: t.id, leadId: lead.id, lineItems: [], taxRateBps: 0, status: "draft" });
+          await repos.invoices.create({ tenantId: t.id, estimateId: e.id, number: await repos.invoices.nextNumber(t.id), lineItems: [], taxRateBps: 0, totals: { subtotalCents: 0, taxCents: 0, totalCents: 0 }, status: "open" });
+          const a = await repos.applications.create({ tenantId: t.id, industry: "x", monthsInBusiness: 1, statedMonthlyRevenueCents: 1, amountRequestedCents: 1, useOfFunds: "x", status: "draft" });
+          await repos.transactions.insertMany([{ tenantId: t.id, applicationId: a.id, date: "2026-01-01", description: "d", amountCents: 1, category: "revenue", rule: "r", fingerprint: "f1" }]);
+        }
+        await repos.purgeTenant(old.id);
+
+        expect(await repos.tenants.findById(old.id)).toBeNull();
+        expect(await repos.leads.listByTenant(old.id)).toEqual([]);
+        expect(await repos.estimates.listByTenant(old.id)).toEqual([]);
+        expect(await repos.invoices.listByTenant(old.id)).toEqual([]);
+        expect(await repos.applications.listByTenant(old.id)).toEqual([]);
+        expect(await repos.customers.listByTenant(old.id)).toEqual([]);
+        expect(await repos.messages.listByTenant(old.id)).toEqual([]);
+        expect(await repos.tenants.listExpiredDemos(new Date("2026-06-01"))).toEqual([]);
+        for (const t of [real, fresh]) expect(await repos.tenants.findById(t.id)).not.toBeNull();
+        expect(await repos.leads.listByTenant(real.id)).toHaveLength(1);
+        expect(await repos.invoices.listByTenant(real.id)).toHaveLength(1);
+      });
+    });
+
     describe("underwriting queries", () => {
       const base = {
         industry: "x", monthsInBusiness: 12, statedMonthlyRevenueCents: 1, amountRequestedCents: 1, useOfFunds: "x", status: "assessed" as const,

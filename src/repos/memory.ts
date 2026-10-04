@@ -23,6 +23,13 @@ export function createMemoryRepos(): Repos {
 
   return {
     tenants: {
+      async listExpiredDemos(now, opts = {}) {
+        return [...tenants.values()]
+          .filter((t) => t.demo && new Date(t.demo.expiresAt) < now)
+          .sort((a, b) => +new Date(a.demo!.expiresAt) - +new Date(b.demo!.expiresAt))
+          .slice(0, opts.limit ?? 100)
+          .map(clone);
+      },
       async create(input) {
         if ([...tenants.values()].some((t) => t.subdomain === input.subdomain))
           throw new ConflictError(`Subdomain "${input.subdomain}" is taken`);
@@ -236,6 +243,17 @@ export function createMemoryRepos(): Repos {
         usage.set(key, n);
         return n;
       },
+    },
+    async purgeTenant(tenantId) {
+      const keep = <T extends { tenantId: Id }>(xs: T[]) => xs.splice(0, xs.length, ...xs.filter((x) => x.tenantId !== tenantId));
+      keep(leads);
+      keep(txns);
+      keep(customers);
+      keep(messages);
+      for (const m of [estimates, invoices, applications] as Map<Id, { tenantId: Id }>[])
+        for (const [id, x] of m) if (x.tenantId === tenantId) m.delete(id);
+      counters.delete(tenantId);
+      tenants.delete(tenantId);
     },
   };
 }

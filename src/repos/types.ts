@@ -20,6 +20,8 @@ export interface TenantRepo {
   findByCustomDomain(hostname: string): Promise<Tenant | null>;
   /** Throws NotFoundError if missing, ConflictError on a hostname clash. */
   update(id: Id, patch: Partial<NewTenant>): Promise<Tenant>;
+  /** Demo businesses whose time ran out before `now`, oldest first. */
+  listExpiredDemos(now: Date, opts?: { limit?: number }): Promise<Tenant[]>;
 }
 
 export interface LeadRepo {
@@ -101,4 +103,6 @@ export interface Repos {
   customers: CustomerRepo;
   messages: MessageRepo;
   usage: UsageRepo;
+  /** Deletes a business and everything it owns (demo cleanup). */
+  purgeTenant(tenantId: Id): Promise<void>;
 }

@@ -25,6 +25,10 @@ services:
       LLM_PROVIDER: ollama
       OLLAMA_URL: http://host.docker.internal:11434   # Ollama on your machine, reached from the container
       SMTP_URL: smtp://mailpit:1025
+      # production image, local machine: open sign-up, a demo underwriter, no proxy in front
+      OPEN_SIGNUP: "true"
+      DEMO_UNDERWRITER_KEY: uw_demo_public_0001
+      TRUST_PROXY_HOPS: "0"
     extra_hosts: ["host.docker.internal:host-gateway"]
     depends_on:
       mongo:

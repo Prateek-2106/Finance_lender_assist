@@ -8,6 +8,7 @@ import { Resolver } from "node:dns/promises";
 import { mailerFromEnv } from "./notify/mailer";
 import { parseUnderwriters } from "./middleware/underwriter";
 import { hashApiKey } from "./lib/apiKey";
+import { scheduleDemoCleanup } from "./services/demoCleanup";
 
 const PORT = Number(process.env.PORT ?? 3000);
 const MONGO_URL = process.env.MONGO_URL;
@@ -49,10 +50,13 @@ async function main() {
       demo: { enabled: demoEnabled, ttlDays: int(env.DEMO_TTL_DAYS, 3), ...(demoUnderwriterKey ? { underwriterKey: demoUnderwriterKey } : {}) },
       aiDailyLimit: { global: int(env.AI_DAILY_LIMIT, 300), perBusiness: int(env.AI_DAILY_LIMIT_PER_BUSINESS, 25) },
       ...(prod || env.RATE_LIMITS === "on" ? { rateLimits: { leadsPerHour: int(env.LEADS_PER_HOUR, 30), demosPerHour: int(env.DEMOS_PER_HOUR, 5) } } : {}),
+      ...(env.ORIGIN_SECRET ? { originSecret: env.ORIGIN_SECRET } : {}),
       trustProxyHops: int(env.TRUST_PROXY_HOPS, prod ? 1 : 0),
       site: { author: env.SITE_AUTHOR ?? "Prateek Ghosh", ...(env.SITE_REPO_URL ? { repoUrl: env.SITE_REPO_URL } : {}) },
     },
   });
+
+  if (demoEnabled) scheduleDemoCleanup(repos);
 
   app.listen(PORT, () => {
     console.log(`mainstreet on http://localhost:${PORT} (${MONGO_URL ? "MongoDB" : "in-memory store"})`);

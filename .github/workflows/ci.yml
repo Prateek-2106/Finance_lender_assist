@@ -67,10 +67,53 @@ jobs:
       - run: npm run typecheck
       - run: npm test
 
-  # Turn on by setting the repository variable DEPLOY=true and the secret
-  # AWS_DEPLOY_ROLE_ARN (printed by the first deploy). See README: Deploy to AWS.
+  # Economy profile (CloudFront + one EC2 instance). Turn on with the repository variables
+  # DEPLOY=economy and INSTANCE_ID, and the secret AWS_DEPLOY_ROLE_ARN (all printed by
+  # `npx cdk deploy`). Infrastructure changes are deployed by hand; this ships the app.
+  deploy-economy:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.DEPLOY == 'economy'
+    needs: [test, e2e, image, infra]
+    runs-on: ubuntu-latest
+    concurrency: production
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Build and push the image (tagged with the commit)
+        run: |
+          IMAGE=${{ steps.ecr.outputs.registry }}/mainstreet
+          docker build -t $IMAGE:${{ github.sha }} -t $IMAGE:latest .
+          docker push --all-tags $IMAGE
+      - name: Restart the app on the instance with the new image
+        run: |
+          CMD_ID=$(aws ssm send-command --instance-ids "${{ vars.INSTANCE_ID }}" --document-name AWS-RunShellScript \
+            --comment "deploy ${{ github.sha }}" --parameters 'commands=["/opt/mainstreet/run.sh ${{ github.sha }}"]' \
+            --query Command.CommandId --output text)
+          for i in $(seq 1 60); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "${{ vars.INSTANCE_ID }}" --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in Success|Failed|Cancelled|TimedOut) break;; esac
+            sleep 5
+          done
+          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "${{ vars.INSTANCE_ID }}" --query '[StandardOutputContent,StandardErrorContent]' --output text
+          test "$STATUS" = Success
+      - name: Smoke test the live site
+        run: |
+          DOMAIN=$(node -p "require('./infra/cdk.json').context.domainName")
+          for i in $(seq 1 20); do curl -fsS "https://$DOMAIN/health" && break; sleep 6; done
+          curl -fsS "https://$DOMAIN/api/platform" | grep -q '"demo":{'
+          # the origin refuses anyone who skips CloudFront
+          test "$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "http://origin.$DOMAIN/api/platform" || true)" != 200
+
+  # Full profile (load balancer + Fargate): DEPLOY=full. Runs cdk deploy from CI.
   deploy:
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.DEPLOY == 'true'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && (vars.DEPLOY == 'full' || vars.DEPLOY == 'true')
     needs: [test, e2e, image, infra]
     runs-on: ubuntu-latest
     concurrency: production
@@ -92,7 +135,7 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: us-east-1
-      - run: npx cdk deploy --require-approval never
+      - run: npx cdk deploy -c profile=full --require-approval never
       - name: Smoke test the live site
         run: |
           DOMAIN=$(node -p "require('./cdk.json').context.domainName")
