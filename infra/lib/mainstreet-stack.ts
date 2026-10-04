@@ -9,6 +9,7 @@ import * as patterns from "aws-cdk-lib/aws-ecs-patterns";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as route53 from "aws-cdk-lib/aws-route53";
+import * as ses from "aws-cdk-lib/aws-ses";
 import * as targets from "aws-cdk-lib/aws-route53-targets";
 import * as ssm from "aws-cdk-lib/aws-ssm";
 import type { Construct } from "constructs";
@@ -20,7 +21,7 @@ export interface MainstreetProps extends cdk.StackProps {
   githubOidcProviderArn?: string; // reuse an existing GitHub OIDC provider in this account
   llmProvider?: "none" | "anthropic";
   /** SSM SecureString parameters, created once with `aws ssm put-parameter` (see README). */
-  secrets?: { mongoUrl: string; twilioAuthToken?: string; anthropicApiKey?: string };
+  secrets?: { mongoUrl: string; twilioAuthToken?: string; anthropicApiKey?: string; underwriters?: string };
 }
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -63,6 +64,11 @@ export class MainstreetStack extends cdk.Stack {
     const secrets: Record<string, ecs.Secret> = { MONGO_URL: secureParam("MongoUrl", secretNames.mongoUrl) };
     if (secretNames.twilioAuthToken) secrets.TWILIO_AUTH_TOKEN = secureParam("TwilioToken", secretNames.twilioAuthToken);
     if (secretNames.anthropicApiKey) secrets.ANTHROPIC_API_KEY = secureParam("AnthropicKey", secretNames.anthropicApiKey);
+    if (secretNames.underwriters) secrets.UNDERWRITERS = secureParam("Underwriters", secretNames.underwriters);
+
+    // Email from no-reply@yourdomain.com through SES, with DKIM records added to Route 53 automatically.
+    // New SES accounts start in the sandbox (only verified recipients) until production access is requested.
+    const mailIdentity = new ses.EmailIdentity(this, "MailIdentity", { identity: ses.Identity.publicHostedZone(zone) });
 
     const service = new patterns.ApplicationLoadBalancedFargateService(this, "Web", {
       cluster,
@@ -87,6 +93,8 @@ export class MainstreetStack extends cdk.Stack {
           BASE_DOMAIN: domainName,
           PUBLIC_URL: `https://${domainName}`,
           LLM_PROVIDER: props.llmProvider ?? "none",
+          MAIL_TRANSPORT: "ses",
+          MAIL_FROM: `Mainstreet <no-reply@${domainName}>`,
         },
         secrets,
         logDriver: ecs.LogDrivers.awsLogs({
@@ -95,6 +103,13 @@ export class MainstreetStack extends cdk.Stack {
         }),
       },
     });
+    // The task's own role sends email: no SMTP passwords anywhere.
+    service.taskDefinition.taskRole.addToPrincipalPolicy(
+      new iam.PolicyStatement({
+        actions: ["ses:SendEmail", "ses:SendRawEmail"],
+        resources: [`arn:aws:ses:${this.region}:${this.account}:identity/${mailIdentity.emailIdentityName}`],
+      }),
+    );
     service.targetGroup.configureHealthCheck({ path: "/health", healthyHttpCodes: "200", interval: cdk.Duration.seconds(15) });
     service.targetGroup.setAttribute("deregistration_delay.timeout_seconds", "15");
 

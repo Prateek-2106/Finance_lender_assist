@@ -31,7 +31,7 @@ describe("traffic", () => {
     });
   });
   it("points the apex and the wildcard at the load balancer", () => {
-    t.resourceCountIs("AWS::Route53::RecordSet", 2);
+    t.resourceCountIs("AWS::Route53::RecordSet", 5); // + 3 DKIM records for email
     t.hasResourceProperties("AWS::Route53::RecordSet", { Name: "example-mainstreet.com.", Type: "A" });
     t.hasResourceProperties("AWS::Route53::RecordSet", { Name: "*.example-mainstreet.com.", Type: "A" });
   });
@@ -73,6 +73,21 @@ describe("service", () => {
   it("has no NAT gateway (cost) and keeps logs a week", () => {
     t.resourceCountIs("AWS::EC2::NatGateway", 0);
     t.hasResourceProperties("AWS::Logs::LogGroup", { RetentionInDays: 7 });
+  });
+});
+
+describe("email", () => {
+  it("verifies the domain with SES (DKIM in Route 53) and lets only the task send from it", () => {
+    t.hasResourceProperties("AWS::SES::EmailIdentity", { EmailIdentity: "example-mainstreet.com" });
+    t.resourceCountIs("AWS::Route53::RecordSet", 5); // apex, wildcard, 3 DKIM CNAMEs
+    t.hasResourceProperties("AWS::IAM::Policy", {
+      PolicyDocument: Match.objectLike({
+        Statement: Match.arrayWith([Match.objectLike({ Action: ["ses:SendEmail", "ses:SendRawEmail"], Resource: Match.anyValue() })]),
+      }),
+    });
+    t.hasResourceProperties("AWS::ECS::TaskDefinition", {
+      ContainerDefinitions: [Match.objectLike({ Environment: Match.arrayWith([{ Name: "MAIL_TRANSPORT", Value: "ses" }]) })],
+    });
   });
 });
 

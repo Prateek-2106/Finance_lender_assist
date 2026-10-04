@@ -17,6 +17,9 @@ export class ValidationError extends Error {
 export class UnauthorizedError extends Error {
   readonly status = 401;
 }
+export class ConflictStateError extends Error {
+  readonly status = 409;
+}
 export class ForbiddenError extends Error {
   readonly status = 403;
 }

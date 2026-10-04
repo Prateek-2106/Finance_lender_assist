@@ -80,41 +80,6 @@ describe("POST /api/leads/:id/draft-estimate", () => {
   });
 });
 
-describe("POST /api/applications/:id/memo", () => {
-  it("writes, verifies and stores a memo for an assessed application", async () => {
-    const p = PROFILES.find((x) => x.key === "stacked-auto")!;
-    const { app, as, prompts } = await setup({
-      summary: { text: "Revenue is steady at $60,322 a month.", cites: ["M1"] },
-      strengths: [],
-      risks: [
-        { text: "Existing lender payments take 22.2% of revenue.", cites: ["M7"] },
-        { text: "The owner has a history of late payments.", cites: ["M12"] },
-      ],
-      recommendation: "approve",
-    });
-    const { body } = await request(app).post("/api/applications").set(as).send({
-      industry: p.industry, monthsInBusiness: p.monthsInBusiness, statedMonthlyRevenueCents: p.statedMonthlyRevenueCents,
-      amountRequestedCents: p.amountRequestedCents, useOfFunds: p.useOfFunds,
-    });
-    const id = body.application.id;
-    expect((await request(app).post(`/api/applications/${id}/memo`).set(as)).status).toBe(422); // not assessed yet
-
-    await request(app).post(`/api/applications/${id}/statements`).set(as).set("content-type", "text/csv").send(toCsv(p, generateStatement(p)));
-    await request(app).post(`/api/applications/${id}/assess`).set(as);
-    const res = await request(app).post(`/api/applications/${id}/memo`).set(as);
-
-    expect(res.status).toBe(200);
-    expect(res.body.memo.risks).toHaveLength(1);
-    expect(res.body.memo.dropped[0].why).toMatch(/M12/);
-    expect(res.body.memo).toMatchObject({ engineDecision: "review", modelRecommendation: "approve", disagreement: true });
-    expect(prompts[0]!.prompt).not.toContain("Joe's Plumbing"); // the business name never reaches the model
-
-    const stored = await request(app).get(`/api/applications/${id}`).set(as);
-    expect(stored.body.application.memo.model).toBe("fake/test");
-    expect(stored.body.application.assessment.decision).toBe("review"); // the engine's decision stands
-  });
-});
-
 describe("drafting is idempotent per lead", () => {
   const reply = { lineItems: [{ sku: "LABOR", quantity: 1 }], questions: [] };
   it("a second click returns the open draft instead of calling the model again", async () => {

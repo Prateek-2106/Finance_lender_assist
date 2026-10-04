@@ -27,7 +27,7 @@ export interface Offer {
   paybackCents: number;
   termBusinessDays: number;
   dailyPaymentCents: number;
-  limitedBy: "requested" | "revenue" | "affordability";
+  limitedBy: "requested" | "revenue" | "affordability" | "underwriter";
   caps: { requestedCents: number; revenueCents: number; affordabilityCents: number };
 }
 

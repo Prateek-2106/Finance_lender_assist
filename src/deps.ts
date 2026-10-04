@@ -5,6 +5,8 @@ export interface Config {
   baseDomain: string; // "lvh.me" locally, "yourapp.com" in prod
   publicUrl: string; // what Twilio sees, e.g. "https://abc.ngrok.app"
   twilioAuthToken: string;
+  /** People who can decide "review" cases, each with their own key (only hashes kept). */
+  underwriters?: { name: string; keyHash: string }[];
 }
 
 /** Minimal LLM interface (step 8). Implement it with any provider. */
@@ -24,4 +26,5 @@ export interface Deps {
   config: Config;
   llm?: LlmClient;
   dns?: DnsResolver;
+  mailer?: import("./notify/mailer").Mailer; // step 11: Mailpit locally, SES in production
 }

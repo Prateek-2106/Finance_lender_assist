@@ -8,6 +8,11 @@ services:
       interval: 5s
       retries: 10
 
+  # A fake inbox: every email the app sends lands at http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:latest
+    ports: ["8025:8025", "1025:1025"]
+
   # The production image, run locally:  docker compose --profile app up --build
   app:
     profiles: ["app"]
@@ -19,6 +24,7 @@ services:
       PUBLIC_URL: http://localhost:3000
       LLM_PROVIDER: ollama
       OLLAMA_URL: http://host.docker.internal:11434   # Ollama on your machine, reached from the container
+      SMTP_URL: smtp://mailpit:1025
     extra_hosts: ["host.docker.internal:host-gateway"]
     depends_on:
       mongo:

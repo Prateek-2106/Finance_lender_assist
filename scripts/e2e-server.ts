@@ -4,8 +4,20 @@ import { createApp } from "../src/app";
 import { createMemoryRepos } from "../src/repos/memory";
 import { hashApiKey } from "../src/lib/apiKey";
 import type { LlmClient } from "../src/deps";
+import type { Mailer, OutgoingEmail } from "../src/notify/mailer";
+import express from "express";
 
 export const E2E_KEY = "sk_e2e_dashboard_key_0000000000000000";
+export const E2E_UW_KEY = "uw_e2e_priya_000000000";
+
+// Emails are recorded, not sent; tests read them from /__test/emails.
+const outbox: (Omit<OutgoingEmail, "attachments"> & { attachments: string[] })[] = [];
+const mailer: Mailer = {
+  name: "e2e-outbox",
+  async send(e) {
+    outbox.push({ to: e.to, subject: e.subject, text: e.text, html: e.html, attachments: (e.attachments ?? []).map((a) => a.filename) });
+  },
+};
 const PORT = Number(process.env.E2E_PORT ?? 3100);
 
 // Answers by task: the memo prompt mentions underwriting, the drafter prompt has a price list.
@@ -35,6 +47,7 @@ await repos.tenants.create({
   subdomain: "joes-plumbing",
   taxRateBps: 875,
   apiKeyHash: hashApiKey(E2E_KEY),
+  ownerEmail: "joe@joesplumbing.test",
   priceList: [
     { sku: "WH-FLUSH", name: "Water heater flush", unitPriceCents: 12900 },
     { sku: "TPR-VALVE", name: "Pressure relief valve", unitPriceCents: 4500 },
@@ -42,6 +55,20 @@ await repos.tenants.create({
   ],
 });
 
-createApp({ repos, llm, config: { baseDomain: "lvh.me", publicUrl: `http://localhost:${PORT}`, twilioAuthToken: "e2e" } }).listen(PORT, () =>
-  console.log(`e2e server on ${PORT}`),
-);
+const app = createApp({
+  repos,
+  llm,
+  mailer,
+  config: {
+    baseDomain: "lvh.me",
+    publicUrl: `http://localhost:${PORT}`,
+    twilioAuthToken: "e2e",
+    underwriters: [{ name: "Priya Shah", keyHash: hashApiKey(E2E_UW_KEY) }],
+  },
+});
+const outer = express();
+outer.get("/__test/emails", (_req, res) => {
+  res.json(outbox);
+});
+outer.use(app);
+outer.listen(PORT, () => console.log(`e2e server on ${PORT}`));

@@ -193,5 +193,66 @@ export function repoContract(name: string, makeRepos: () => Promise<Repos>) {
         expect(await repos.transactions.listByApplication("t2", "a1")).toHaveLength(0);
       });
     });
+
+    describe("customers", () => {
+      it("the same email or phone is the same customer; details refresh and visits count", async () => {
+        const a = await repos.customers.upsertByContact("t1", { name: "Ann", email: "ann@x.co" });
+        const b = await repos.customers.upsertByContact("t1", { name: "Ann Lee", email: "ann@x.co", phone: "+17165550123" });
+        expect(b.id).toBe(a.id);
+        expect(b).toMatchObject({ name: "Ann Lee", phone: "+17165550123", leadCount: 2 });
+        const c = await repos.customers.upsertByContact("t1", { name: "A. Lee", phone: "+17165550123" });
+        expect(c.id).toBe(a.id);
+        expect(c.leadCount).toBe(3);
+      });
+      it("a contact without a name keeps the known name, and a new one is named by phone", async () => {
+        await repos.customers.upsertByContact("t1", { name: "Ann", phone: "+17165550123" });
+        expect((await repos.customers.upsertByContact("t1", { phone: "+17165550123" })).name).toBe("Ann");
+        expect((await repos.customers.upsertByContact("t1", { phone: "+17165559999" })).name).toBe("+17165559999");
+      });
+      it("is scoped per business", async () => {
+        const a = await repos.customers.upsertByContact("t1", { name: "Ann", email: "ann@x.co" });
+        const b = await repos.customers.upsertByContact("t2", { name: "Ann", email: "ann@x.co" });
+        expect(b.id).not.toBe(a.id);
+        expect(await repos.customers.findById("t2", a.id)).toBeNull();
+        expect(await repos.customers.listByTenant("t1")).toHaveLength(1);
+      });
+    });
+
+    describe("messages", () => {
+      it("records status changes and lists newest first per business", async () => {
+        const m1 = await repos.messages.create({ tenantId: "t1", template: "a", subject: "A", status: "queued" });
+        await repos.messages.create({ tenantId: "t1", template: "b", subject: "B", status: "queued" });
+        await repos.messages.create({ tenantId: "t2", template: "c", subject: "C", status: "queued" });
+        await repos.messages.setStatus(m1.id, "sent", { sentAt: new Date() });
+        const list = await repos.messages.listByTenant("t1");
+        expect(list.map((m) => m.template)).toEqual(["b", "a"]);
+        expect(list[1]!.status).toBe("sent");
+        expect(list[1]!.sentAt).toBeInstanceOf(Date);
+      });
+    });
+
+    describe("underwriting queries", () => {
+      const base = {
+        industry: "x", monthsInBusiness: 12, statedMonthlyRevenueCents: 1, amountRequestedCents: 1, useOfFunds: "x", status: "assessed" as const,
+      };
+      const pending = { outcome: "pending_review" as const, decidedBy: { kind: "scorecard" as const, version: "v" }, at: new Date() };
+      it("lists pending reviews across businesses, oldest first; finds any by id", async () => {
+        const a = await repos.applications.create({ ...base, tenantId: "t1", decision: pending });
+        const b = await repos.applications.create({ ...base, tenantId: "t2", decision: pending });
+        await repos.applications.create({ ...base, tenantId: "t1", decision: { ...pending, outcome: "approved" } });
+        expect((await repos.applications.listByOutcome("pending_review")).map((x) => x.id)).toEqual([a.id, b.id]);
+        expect(await repos.applications.listByOutcome("approved")).toHaveLength(1);
+        expect((await repos.applications.findByIdAnyTenant(b.id))?.tenantId).toBe("t2");
+      });
+      it("invoices list newest first per business", async () => {
+        const inv = (tenantId: string, n: string) => ({
+          tenantId, estimateId: n, number: n, lineItems: [], taxRateBps: 0, totals: { subtotalCents: 0, taxCents: 0, totalCents: 0 }, status: "open" as const,
+        });
+        await repos.invoices.create(inv("t1", "INV-1"));
+        await repos.invoices.create(inv("t1", "INV-2"));
+        await repos.invoices.create(inv("t2", "INV-9"));
+        expect((await repos.invoices.listByTenant("t1")).map((i) => i.number)).toEqual(["INV-2", "INV-1"]);
+      });
+    });
   });
 }

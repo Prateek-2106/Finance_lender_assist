@@ -193,3 +193,24 @@ start "https://$($t.tenant.subdomain).yourdomain.com/app"; $t.apiKey
 **Logs:** CloudWatch → Log groups → `Mainstreet-Logs…`, or `aws logs tail <group> --follow`.
 
 **Tear down:** `npm run infra:destroy`.
+
+## Step 11: review round
+
+**Who it's for.** Estimates carry the customer (from the lead, or typed in), and invoices freeze it as **Bill to** on the PDF, the email and the receipt. Repeat requests from the same email or phone link to one customer.
+
+**Emails at each stage.** Quote request (customer + owner), estimate sent, invoice issued (PDF attached), payment receipt, and funding decisions (owner). Locally they go to **Mailpit**, a fake inbox at http://localhost:8025 (`docker compose up -d` starts it). In AWS they go through **SES** using the task's IAM role. Every attempt is logged (`GET /api/messages`, and Insights → Emails); a failing mail server never breaks the action.
+
+```powershell
+# owner's notification address (or set it in Insights)
+Invoke-RestMethod -Method Patch "$base/settings" -Headers $k -ContentType "application/json" -Body '{"ownerEmail":"you@example.com"}'
+```
+
+**Funding decisions say who decided.** Clear cases are decided by the scorecard; "review" cases wait for a named underwriter in the console:
+
+- http://localhost:3000/underwriting, demo key `uw_dev_priya_0001` (Priya Shah). Set `UNDERWRITERS="Name=key;Name2=key2"` for your own.
+- Queue across every business, oldest first. Full risk breakdown, AI memo (fact-checked), invoices paid through Mainstreet vs bank revenue, and a decision form that previews the daily payment, total repayment load and APR.
+- Approve with an amount, or decline. A note is required, and the business sees it. Every decision is kept in a log.
+
+**Plain words for the applicant.** The owner sees the decision first: amount, total repayment, daily payment, months, **estimated APR**, and for every reason, what would help. Written by code from the same numbers as the decision. The scoring sits under "How we decided"; the memo stays internal.
+
+**After payment.** Insights shows lead → estimate → accepted → paid conversion, revenue by month, average job, days to get paid, unpaid invoices and returning customers.

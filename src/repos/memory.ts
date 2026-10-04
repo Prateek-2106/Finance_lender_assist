@@ -1,6 +1,6 @@
 // Reference implementation of the Repos contract, used by most tests.
 import { randomUUID } from "node:crypto";
-import type { BankTransaction, Estimate, FundingApplication, Id, Invoice, Lead, Tenant } from "../domain";
+import type { BankTransaction, Customer, Estimate, FundingApplication, Id, Invoice, Lead, Message, Tenant } from "../domain";
 import { ConflictError, NotFoundError } from "../errors";
 import type { Repos } from "./types";
 
@@ -14,6 +14,8 @@ export function createMemoryRepos(): Repos {
   const counters = new Map<Id, number>();
   const applications = new Map<Id, FundingApplication>();
   const txns: BankTransaction[] = [];
+  const customers: Customer[] = [];
+  const messages: Message[] = [];
 
   const hostTaken = (hostname: string | undefined, exceptId?: Id) =>
     !!hostname && [...tenants.values()].some((t) => t.id !== exceptId && t.customDomain?.hostname === hostname);
@@ -116,6 +118,9 @@ export function createMemoryRepos(): Repos {
         invoices.set(id, next);
         return clone(next);
       },
+      async listByTenant(tenantId, opts = {}) {
+        return [...invoices.values()].filter((i) => i.tenantId === tenantId).reverse().slice(0, opts.limit ?? 50).map(clone);
+      },
       async nextNumber(tenantId) {
         const n = (counters.get(tenantId) ?? 0) + 1;
         counters.set(tenantId, n);
@@ -134,6 +139,15 @@ export function createMemoryRepos(): Repos {
       },
       async listByTenant(tenantId, opts = {}) {
         return [...applications.values()].filter((a) => a.tenantId === tenantId).reverse().slice(0, opts.limit ?? 50).map(clone);
+      },
+      async listByOutcome(outcome, opts = {}) {
+        const list = [...applications.values()].filter((a) => a.decision?.outcome === outcome);
+        if (outcome !== "pending_review") list.reverse(); // decided: newest first
+        return list.slice(0, opts.limit ?? 50).map(clone);
+      },
+      async findByIdAnyTenant(id) {
+        const a = applications.get(id);
+        return a ? clone(a) : null;
       },
       async update(tenantId, id, patch) {
         const a = applications.get(id);
@@ -163,6 +177,52 @@ export function createMemoryRepos(): Repos {
           .filter((t) => !opts.category || t.category === opts.category)
           .sort((x, y) => x.date.localeCompare(y.date)) // stable: same-day lines keep statement order
           .map(clone);
+      },
+    },
+    customers: {
+      async upsertByContact(tenantId, c) {
+        const existing = customers.find(
+          (x) => x.tenantId === tenantId && ((c.email && x.email === c.email) || (c.phone && x.phone === c.phone)),
+        );
+        if (existing) {
+          Object.assign(existing, {
+            name: c.name ?? existing.name,
+            ...(c.email ? { email: c.email } : {}),
+            ...(c.phone ? { phone: c.phone } : {}),
+            leadCount: existing.leadCount + 1,
+            lastSeenAt: new Date(),
+          });
+          return clone(existing);
+        }
+        const now = new Date();
+        const created: Customer = { id: randomUUID(), tenantId, ...clone(c), name: c.name ?? c.phone ?? c.email ?? "Customer", leadCount: 1, createdAt: now, lastSeenAt: now };
+        customers.push(created);
+        return clone(created);
+      },
+      async findById(tenantId, id) {
+        const c = customers.find((x) => x.id === id && x.tenantId === tenantId);
+        return c ? clone(c) : null;
+      },
+      async listByTenant(tenantId, opts = {}) {
+        return customers
+          .filter((c) => c.tenantId === tenantId)
+          .sort((a, b) => b.lastSeenAt.getTime() - a.lastSeenAt.getTime())
+          .slice(0, opts.limit ?? 50)
+          .map(clone);
+      },
+    },
+    messages: {
+      async create(input) {
+        const msg: Message = { ...clone(input), id: randomUUID(), createdAt: new Date() };
+        messages.push(msg);
+        return clone(msg);
+      },
+      async setStatus(id, status, extra = {}) {
+        const msg = messages.find((x) => x.id === id);
+        if (msg) Object.assign(msg, { status, ...clone(extra) });
+      },
+      async listByTenant(tenantId, opts = {}) {
+        return messages.filter((x) => x.tenantId === tenantId).reverse().slice(0, opts.limit ?? 50).map(clone);
       },
     },
   };

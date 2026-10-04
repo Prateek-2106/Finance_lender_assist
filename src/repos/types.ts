@@ -1,6 +1,6 @@
 // The contract every storage backend must satisfy.
 // Implemented by repos/memory.ts (tests, local dev) and repos/mongo.ts.
-import type { BankTransaction, Estimate, FundingApplication, Id, Invoice, Lead, Tenant, TxnCategory } from "../domain";
+import type { BankTransaction, Contact, Customer, Estimate, FundingApplication, FundingDecision, Id, Invoice, Lead, Message, MessageStatus, Tenant, TxnCategory } from "../domain";
 
 export type NewTenant = Omit<Tenant, "id" | "createdAt">;
 export type NewLead = Omit<Lead, "id" | "createdAt">;
@@ -8,6 +8,7 @@ export type NewEstimate = Omit<Estimate, "id" | "createdAt">;
 export type NewInvoice = Omit<Invoice, "id" | "createdAt">;
 export type NewApplication = Omit<FundingApplication, "id" | "createdAt">;
 export type NewTransaction = Omit<BankTransaction, "id" | "createdAt">;
+export type NewMessage = Omit<Message, "id" | "createdAt">;
 
 export interface TenantRepo {
   /** Throws ConflictError if the subdomain (or custom hostname) is taken. */
@@ -43,6 +44,8 @@ export interface InvoiceRepo {
   findById(tenantId: Id, id: Id): Promise<Invoice | null>;
   findByEstimate(tenantId: Id, estimateId: Id): Promise<Invoice | null>;
   update(tenantId: Id, id: Id, patch: Partial<NewInvoice>): Promise<Invoice>;
+  /** Newest first. */
+  listByTenant(tenantId: Id, opts?: { limit?: number }): Promise<Invoice[]>;
   /** Atomically returns the next per-tenant number: "INV-0001", "INV-0002", ... */
   nextNumber(tenantId: Id): Promise<string>;
 }
@@ -52,6 +55,10 @@ export interface ApplicationRepo {
   findById(tenantId: Id, id: Id): Promise<FundingApplication | null>;
   /** Newest first. */
   listByTenant(tenantId: Id, opts?: { limit?: number }): Promise<FundingApplication[]>;
+  /** Underwriter views span every business. Pending reviews come oldest first (first in, first decided). */
+  listByOutcome(outcome: FundingDecision["outcome"], opts?: { limit?: number }): Promise<FundingApplication[]>;
+  /** Underwriters only: no tenant scope. Never expose this to a tenant route. */
+  findByIdAnyTenant(id: Id): Promise<FundingApplication | null>;
   update(tenantId: Id, id: Id, patch: Partial<NewApplication>): Promise<FundingApplication>;
 }
 
@@ -62,6 +69,21 @@ export interface TransactionRepo {
   listByApplication(tenantId: Id, applicationId: Id, opts?: { category?: TxnCategory }): Promise<BankTransaction[]>;
 }
 
+export interface CustomerRepo {
+  /** Finds the customer with this email or phone (in this business) and refreshes their details, or creates one. */
+  upsertByContact(tenantId: Id, contact: Partial<Contact>): Promise<Customer>; // no name: keep the known one
+  findById(tenantId: Id, id: Id): Promise<Customer | null>;
+  /** Most recently seen first. */
+  listByTenant(tenantId: Id, opts?: { limit?: number }): Promise<Customer[]>;
+}
+
+export interface MessageRepo {
+  create(input: NewMessage): Promise<Message>;
+  setStatus(id: Id, status: MessageStatus, extra?: { error?: string; sentAt?: Date }): Promise<void>;
+  /** Newest first. */
+  listByTenant(tenantId: Id, opts?: { limit?: number }): Promise<Message[]>;
+}
+
 export interface Repos {
   tenants: TenantRepo;
   leads: LeadRepo;
@@ -69,4 +91,6 @@ export interface Repos {
   invoices: InvoiceRepo;
   applications: ApplicationRepo;
   transactions: TransactionRepo;
+  customers: CustomerRepo;
+  messages: MessageRepo;
 }

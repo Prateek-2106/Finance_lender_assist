@@ -19,6 +19,12 @@ export function renderInvoicePdf(
     doc.moveDown(0.5).fontSize(12).text(`Invoice ${invoice.number}`);
     doc.text(`Issued ${invoice.createdAt.toISOString().slice(0, 10)}`);
     doc.text(`Status: ${invoice.status.toUpperCase()}`);
+    if (invoice.billTo) {
+      doc.moveDown(0.6).font("Helvetica-Bold").text("Bill to").font("Helvetica");
+      doc.text(invoice.billTo.name);
+      if (invoice.billTo.phone) doc.text(invoice.billTo.phone);
+      if (invoice.billTo.email) doc.text(invoice.billTo.email);
+    }
     doc.moveDown();
 
     const cols = { desc: 54, qty: 330, unit: 390, total: 470 };

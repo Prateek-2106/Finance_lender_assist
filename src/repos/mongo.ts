@@ -1,5 +1,5 @@
 import { MongoServerError, ObjectId, type Db } from "mongodb";
-import type { BankTransaction, Estimate, FundingApplication, Invoice, Lead, Tenant } from "../domain";
+import type { BankTransaction, Customer, Estimate, FundingApplication, Invoice, Lead, Message, Tenant } from "../domain";
 import { ConflictError, NotFoundError } from "../errors";
 import type { Repos } from "./types";
 
@@ -37,6 +37,8 @@ export async function createMongoRepos(db: Db): Promise<Repos> {
   const counters = db.collection<{ _id: string; seq: number }>("counters");
   const applications = db.collection<Doc<FundingApplication>>("applications");
   const txns = db.collection<Doc<BankTransaction>>("transactions");
+  const customers = db.collection<Doc<Customer>>("customers");
+  const messages = db.collection<Doc<Message>>("messages");
 
   await Promise.all([
     tenants.createIndex({ subdomain: 1 }, { unique: true }),
@@ -52,6 +54,12 @@ export async function createMongoRepos(db: Db): Promise<Repos> {
     applications.createIndex({ tenantId: 1, _id: 1 }),
     txns.createIndex({ applicationId: 1, fingerprint: 1 }, { unique: true }),
     txns.createIndex({ tenantId: 1, applicationId: 1, date: 1, _id: 1 }),
+    applications.createIndex({ "decision.outcome": 1, _id: 1 }),
+    invoices.createIndex({ tenantId: 1, _id: -1 }),
+    customers.createIndex({ tenantId: 1, email: 1 }, { unique: true, partialFilterExpression: { email: { $type: "string" } } }),
+    customers.createIndex({ tenantId: 1, phone: 1 }, { unique: true, partialFilterExpression: { phone: { $type: "string" } } }),
+    customers.createIndex({ tenantId: 1, lastSeenAt: -1 }),
+    messages.createIndex({ tenantId: 1, _id: -1 }),
   ]);
 
   return {
@@ -137,6 +145,10 @@ export async function createMongoRepos(db: Db): Promise<Repos> {
         if (!d) throw new NotFoundError("Invoice not found");
         return fromDoc(d)!;
       },
+      async listByTenant(tenantId, opts = {}) {
+        const docs = await invoices.find({ tenantId }).sort({ _id: -1 }).limit(opts.limit ?? 50).toArray();
+        return docs.map((d) => fromDoc(d)!);
+      },
       async nextNumber(tenantId) {
         const c = await counters.findOneAndUpdate(
           { _id: `invoice:${tenantId}` },
@@ -158,6 +170,17 @@ export async function createMongoRepos(db: Db): Promise<Repos> {
       async listByTenant(tenantId, opts = {}) {
         const docs = await applications.find({ tenantId }).sort({ _id: -1 }).limit(opts.limit ?? 50).toArray();
         return docs.map((d) => fromDoc(d)!);
+      },
+      async listByOutcome(outcome, opts = {}) {
+        const docs = await applications
+          .find({ "decision.outcome": outcome })
+          .sort({ _id: outcome === "pending_review" ? 1 : -1 })
+          .limit(opts.limit ?? 50)
+          .toArray();
+        return docs.map((d) => fromDoc(d)!);
+      },
+      async findByIdAnyTenant(id) {
+        return fromDoc(await applications.findOne({ _id: id }));
       },
       async update(tenantId, id, patch) {
         const d = await applications.findOneAndUpdate({ _id: id, tenantId }, { $set: patch }, { returnDocument: "after" });
@@ -186,6 +209,50 @@ export async function createMongoRepos(db: Db): Promise<Repos> {
         const q: Record<string, unknown> = { tenantId, applicationId };
         if (opts.category) q.category = opts.category;
         const docs = await txns.find(q).sort({ date: 1, _id: 1 }).toArray();
+        return docs.map((d) => fromDoc(d)!);
+      },
+    },
+    customers: {
+      async upsertByContact(tenantId, c) {
+        const or = [...(c.email ? [{ email: c.email }] : []), ...(c.phone ? [{ phone: c.phone }] : [])];
+        const now = new Date();
+        if (or.length) {
+          const d = await customers.findOneAndUpdate(
+            { tenantId, $or: or },
+            { $set: { ...(c.name ? { name: c.name } : {}), ...(c.email ? { email: c.email } : {}), ...(c.phone ? { phone: c.phone } : {}), lastSeenAt: now }, $inc: { leadCount: 1 } },
+            { returnDocument: "after" },
+          );
+          if (d) return fromDoc(d)!;
+        }
+        const created: Customer = { id: newId(), tenantId, ...c, name: c.name ?? c.phone ?? c.email ?? "Customer", leadCount: 1, createdAt: now, lastSeenAt: now };
+        try {
+          await customers.insertOne(toDoc(created));
+          return created;
+        } catch (e) {
+          // a concurrent request created them first: count this visit on that record
+          if (e instanceof MongoServerError && e.code === 11000) return this.upsertByContact(tenantId, c);
+          throw e;
+        }
+      },
+      async findById(tenantId, id) {
+        return fromDoc(await customers.findOne({ _id: id, tenantId }));
+      },
+      async listByTenant(tenantId, opts = {}) {
+        const docs = await customers.find({ tenantId }).sort({ lastSeenAt: -1 }).limit(opts.limit ?? 50).toArray();
+        return docs.map((d) => fromDoc(d)!);
+      },
+    },
+    messages: {
+      async create(input) {
+        const msg: Message = { ...input, id: newId(), createdAt: new Date() };
+        await messages.insertOne(toDoc(msg));
+        return msg;
+      },
+      async setStatus(id, status, extra = {}) {
+        await messages.updateOne({ _id: id }, { $set: { status, ...extra } });
+      },
+      async listByTenant(tenantId, opts = {}) {
+        const docs = await messages.find({ tenantId }).sort({ _id: -1 }).limit(opts.limit ?? 50).toArray();
         return docs.map((d) => fromDoc(d)!);
       },
     },

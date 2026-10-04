@@ -11,9 +11,14 @@ import { webhooksRouter } from "./routes/webhooks"; // step 4
 import { estimatesRouter } from "./routes/estimates"; // steps 5 and 8
 import { domainsRouter } from "./routes/domains"; // step 10
 import { applicationsRouter } from "./routes/applications"; // steps 6–7
+import { underwritingRouter } from "./routes/underwriting"; // step 11
+import { ownerRouter } from "./routes/owner"; // step 11
+import { Notifier } from "./notify/notifier"; // step 11
 
 export function createApp(deps: Deps) {
   const app = express();
+  const notifier = new Notifier(deps.repos, deps.config, deps.mailer);
+  app.locals.notifier = notifier; // tests await notifier.idle() before checking emails
   app.set("trust proxy", true); // behind ALB/CloudFront in prod (step 10)
   app.use(express.json({ limit: "100kb" }));
 
@@ -23,16 +28,25 @@ export function createApp(deps: Deps) {
 
   // Platform-level routes (no tenant from the Host header)
   app.use("/api/tenants", tenantsRouter(deps));
-  app.use("/webhooks", webhooksRouter(deps));
+  app.use("/webhooks", webhooksRouter(deps, notifier));
+  app.use("/api/underwriting", underwritingRouter(deps, notifier)); // OPF-side staff, across all businesses
 
   // Everything below is tenant-scoped: the tenant comes from the Host header
-  app.use("/api", resolveTenant(deps), leadsRouter(deps), estimatesRouter(deps), applicationsRouter(deps), domainsRouter(deps));
+  app.use(
+    "/api",
+    resolveTenant(deps),
+    leadsRouter(deps, notifier),
+    estimatesRouter(deps, notifier),
+    applicationsRouter(deps, notifier),
+    domainsRouter(deps),
+    ownerRouter(deps),
+  );
 
   // The built React app (npm run web:build): "/" is the tenant's website, "/app" the owner dashboard.
   const webDir = resolve(process.cwd(), "dist/web");
   if (existsSync(webDir)) {
     app.use(express.static(webDir, { index: false }));
-    app.get(/^\/(app(\/.*)?)?$/, (_req, res) => res.sendFile(resolve(webDir, "index.html")));
+    app.get(/^\/((app|underwriting)(\/.*)?)?$/, (_req, res) => res.sendFile(resolve(webDir, "index.html")));
   }
 
   app.use(notFoundHandler);

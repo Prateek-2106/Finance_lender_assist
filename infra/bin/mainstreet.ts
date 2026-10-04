@@ -18,6 +18,7 @@ new MainstreetStack(app, "Mainstreet", {
     mongoUrl: "/mainstreet/MONGO_URL",
     ...(ctx("twilio") === "true" ? { twilioAuthToken: "/mainstreet/TWILIO_AUTH_TOKEN" } : {}),
     ...(ctx("llmProvider") === "anthropic" ? { anthropicApiKey: "/mainstreet/ANTHROPIC_API_KEY" } : {}),
+    ...(ctx("underwriters") === "true" ? { underwriters: "/mainstreet/UNDERWRITERS" } : {}),
   },
   tags: { project: "mainstreet" },
 });

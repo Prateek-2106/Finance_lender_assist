@@ -1,11 +1,15 @@
 // Thin fetch wrapper. Same origin, so the Host header tells the API which tenant this is.
-const KEY = "mainstreet.apiKey";
-
-export const session = {
-  get: () => sessionStorage.getItem(KEY),
-  set: (k: string) => sessionStorage.setItem(KEY, k),
-  clear: () => sessionStorage.removeItem(KEY),
-};
+function keyStore(name: string) {
+  return {
+    get: () => sessionStorage.getItem(name),
+    set: (k: string) => sessionStorage.setItem(name, k),
+    clear: () => sessionStorage.removeItem(name),
+  };
+}
+/** The business owner's key, for this business's address. */
+export const session = keyStore("mainstreet.apiKey");
+/** An underwriter's key, for the platform-wide console. Kept separately on purpose. */
+export const uwSession = keyStore("mainstreet.underwriterKey");
 
 export class ApiError extends Error {
   constructor(message: string, readonly status: number, readonly issues?: { path?: string; line?: number; message: string }[]) {
@@ -13,9 +17,9 @@ export class ApiError extends Error {
   }
 }
 
-export async function api<T>(path: string, init: RequestInit & { json?: unknown; text?: string } = {}): Promise<T> {
+export async function api<T>(path: string, init: RequestInit & { json?: unknown; text?: string; as?: "owner" | "underwriter" } = {}): Promise<T> {
   const headers = new Headers(init.headers);
-  const key = session.get();
+  const key = init.as === "underwriter" ? uwSession.get() : session.get();
   if (key) headers.set("authorization", `Bearer ${key}`);
   let body = init.body;
   if (init.json !== undefined) {
@@ -45,5 +49,6 @@ export const money = (cents: number) => usd.format(cents / 100);
 const usd0 = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 /** Whole dollars, for funding amounts where cents are noise. */
 export const dollars = (cents: number) => usd0.format(Math.round(cents / 100));
+export const pct = (x: number | null | undefined, digits = 0) => (x === null || x === undefined ? "n/a" : `${(x * 100).toFixed(digits)}%`);
 export const day = (iso: string | Date) =>
   new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });

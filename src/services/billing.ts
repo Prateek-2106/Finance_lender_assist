@@ -1,4 +1,4 @@
-import type { Estimate, EstimateStatus, Id, Invoice, LineItem, PriceItem, Receipt, Tenant } from "../domain";
+import type { Contact, Estimate, EstimateStatus, Id, Invoice, Lead, LineItem, PriceItem, Receipt, Tenant } from "../domain";
 import { InvalidTransitionError, NotFoundError, ValidationError } from "../errors";
 import { computeTotals } from "../lib/money";
 import type { Repos } from "../repos/types";
@@ -29,18 +29,29 @@ export function checkQuantities(priceList: PriceItem[], lineItems: LineItem[]): 
 export async function createEstimate(
   repos: Repos,
   tenant: Tenant,
-  input: { leadId?: Id; lineItems: LineItem[]; notes?: string; status?: "draft" | "needs_review"; aiDraft?: Estimate["aiDraft"] },
+  input: { leadId?: Id; customer?: Contact; lineItems: LineItem[]; notes?: string; status?: "draft" | "needs_review"; aiDraft?: Estimate["aiDraft"] },
 ): Promise<Estimate> {
-  if (input.leadId && !(await repos.leads.findById(tenant.id, input.leadId))) throw new NotFoundError("Lead not found");
+  let lead: Lead | null = null;
+  if (input.leadId) {
+    lead = await repos.leads.findById(tenant.id, input.leadId);
+    if (!lead) throw new NotFoundError("Lead not found");
+  }
+  const customer = input.customer ?? (lead ? contactOf(lead) : undefined);
   return repos.estimates.create({
     tenantId: tenant.id,
     leadId: input.leadId,
+    ...(customer ? { customer } : {}),
     lineItems: checkQuantities(tenant.priceList, input.lineItems),
     notes: input.notes,
     taxRateBps: tenant.taxRateBps,
     status: input.status ?? "draft",
     ...(input.aiDraft ? { aiDraft: input.aiDraft } : {}),
   });
+}
+
+/** A lead from a text message has no real name; its phone number stands in. */
+export function contactOf(lead: Pick<Lead, "name" | "phone" | "email">): Contact {
+  return { name: lead.name, ...(lead.phone ? { phone: lead.phone } : {}), ...(lead.email ? { email: lead.email } : {}) };
 }
 
 async function getEstimate(repos: Repos, tenantId: Id, id: Id): Promise<Estimate> {
@@ -73,6 +84,7 @@ export async function convertToInvoice(repos: Repos, tenantId: Id, estimateId: I
     tenantId,
     estimateId,
     number: await repos.invoices.nextNumber(tenantId),
+    ...(e.customer ? { billTo: structuredClone(e.customer) } : {}),
     lineItems: structuredClone(e.lineItems),
     taxRateBps: e.taxRateBps,
     totals: computeTotals(e.lineItems, e.taxRateBps),
@@ -97,6 +109,7 @@ export async function payInvoice(
     receipt: {
       invoiceNumber: invoice.number,
       tenantName: tenant.name,
+      ...(invoice.billTo ? { billTo: invoice.billTo } : {}),
       amountPaidCents: invoice.totals.totalCents,
       paidAt,
     },

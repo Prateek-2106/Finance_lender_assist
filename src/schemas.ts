@@ -33,6 +33,7 @@ export const TenantCreateSchema = z
     subdomain: z.string().trim().toLowerCase().optional(),
     taxRateBps: z.number().int().min(0).max(2000).default(0),
     priceList: z.array(PriceItemSchema).max(500).default([]),
+    ownerEmail: z.email().trim().toLowerCase().optional(),
   })
   .transform((t, ctx) => {
     let subdomain = t.subdomain;
@@ -56,6 +57,30 @@ export const TenantCreateSchema = z
     return { ...t, subdomain };
   });
 export type TenantCreate = z.output<typeof TenantCreateSchema>;
+
+/** A customer's contact details, cleaned the same way as a lead's. */
+export const ContactSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  phone: z
+    .string()
+    .optional()
+    .transform((p, ctx) => {
+      if (p === undefined || p.trim() === "") return undefined;
+      const n = normalizePhone(p);
+      if (!n) {
+        ctx.addIssue({ code: "custom", message: "Invalid phone number" });
+        return z.NEVER;
+      }
+      return n;
+    }),
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .optional()
+    .transform((e) => (e === "" ? undefined : e))
+    .pipe(z.email().optional()),
+});
 
 export const LeadCreateSchema = z
   .object({
@@ -97,6 +122,7 @@ export function parseOrThrow<S extends z.ZodType>(schema: S, data: unknown): z.o
 
 export const EstimateCreateSchema = z.object({
   leadId: z.string().min(1).optional(),
+  customer: ContactSchema.optional(), // defaults to the lead's details
   lineItems: z.array(LineItemSchema).max(100),
   notes: z.string().trim().max(2000).optional(),
 });
@@ -121,3 +147,12 @@ export const PriceListSchema = z
   .array(PriceItemSchema)
   .max(500)
   .refine((xs) => new Set(xs.map((x) => x.sku.toUpperCase())).size === xs.length, { message: "Duplicate SKU" });
+
+export const SettingsSchema = z.object({
+  ownerEmail: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .transform((e) => (e === "" ? undefined : e))
+    .pipe(z.email().optional()),
+});

@@ -14,10 +14,11 @@ import {
   voidInvoice,
 } from "../services/billing";
 import type { Estimate } from "../domain";
+import type { Notifier } from "../notify/notifier";
 
 const withTotals = (e: Estimate) => ({ ...e, totals: computeTotals(e.lineItems, e.taxRateBps) });
 
-export function estimatesRouter({ repos }: Deps) {
+export function estimatesRouter({ repos }: Deps, notifier: Notifier) {
   const r = Router();
   r.use(["/estimates", "/invoices"], requireApiKey);
   const id = (v: unknown) => String(v);
@@ -48,6 +49,7 @@ export function estimatesRouter({ repos }: Deps) {
   r.post("/estimates/:id/transition", async (req, res) => {
     const { to } = parseOrThrow(EstimateTransitionSchema, req.body);
     const e = await transitionEstimate(repos, getTenant(res).id, id(req.params.id), to);
+    if (to === "sent") void notifier.estimateSent(getTenant(res), e);
     res.json({ estimate: withTotals(e) });
   });
 
@@ -55,6 +57,7 @@ export function estimatesRouter({ repos }: Deps) {
     const tenantId = getTenant(res).id;
     const existed = await repos.invoices.findByEstimate(tenantId, id(req.params.id));
     const invoice = await convertToInvoice(repos, tenantId, id(req.params.id));
+    if (!existed) void notifier.invoiceIssued(getTenant(res), invoice); // once, even if converted twice
     res.status(existed ? 200 : 201).json({ invoice });
   });
 
@@ -65,7 +68,9 @@ export function estimatesRouter({ repos }: Deps) {
   });
 
   r.post("/invoices/:id/pay", async (req, res) => {
-    res.json(await payInvoice(repos, getTenant(res), id(req.params.id)));
+    const result = await payInvoice(repos, getTenant(res), id(req.params.id));
+    void notifier.paymentReceived(getTenant(res), result.invoice, result.receipt);
+    res.json(result);
   });
 
   r.post("/invoices/:id/void", async (req, res) => {

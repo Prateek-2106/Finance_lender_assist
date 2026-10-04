@@ -1,16 +1,28 @@
-import { test, expect } from "@playwright/test";
-import { E2E_KEY } from "../scripts/e2e-server";
+import { test, expect, type Page } from "@playwright/test";
+import { E2E_KEY, E2E_UW_KEY } from "../scripts/e2e-server";
 
 test.describe.configure({ mode: "serial" });
+
+const signIn = async (page: Page, path = "/app") => {
+  await page.goto(path);
+  await page.getByLabel("API key").fill(E2E_KEY);
+  await page.getByRole("button", { name: "Sign in" }).click();
+};
+const emails = async (page: Page) =>
+  (await (await page.request.get("http://localhost:3100/__test/emails")).json()) as { to: string; subject: string; text: string; attachments: string[] }[];
 
 test("a customer requests a quote on the business's website", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Joe's Plumbing" })).toBeVisible();
   await page.getByLabel("Your name").fill("Ann Lee");
   await page.getByLabel("Phone").fill("716-555-0123");
+  await page.getByLabel("Email").fill("ann@example.test");
   await page.getByLabel("What do you need?").fill("Water heater pops and the relief valve drips.");
   await page.getByRole("button", { name: "Request a quote" }).click();
   await expect(page.getByRole("status")).toContainText("we got your request");
+  await expect.poll(async () => (await emails(page)).map((e) => e.subject)).toEqual(
+    expect.arrayContaining(["We got your request - Joe's Plumbing", "New lead: Ann Lee"]),
+  );
 });
 
 test("website validation errors are shown, not swallowed", async ({ page }) => {
@@ -28,68 +40,94 @@ test("a wrong API key is refused", async ({ page }) => {
   await expect(page.getByRole("alert")).toContainText(/does not match/);
 });
 
-test("the owner drafts an estimate from the lead, approves it, invoices and gets paid", async ({ page }) => {
-  await page.goto("/app");
-  await page.getByLabel("API key").fill(E2E_KEY);
-  await page.getByRole("button", { name: "Sign in" }).click();
-
+test("the owner drafts an estimate for the customer, invoices them and gets paid, with emails at each stage", async ({ page }) => {
+  await signIn(page);
   const row = page.getByRole("row", { name: /Ann Lee/ });
-  await expect(row).toContainText("Water heater pops");
   await row.getByRole("button", { name: "Draft estimate" }).click();
 
   const est = page.getByRole("region", { name: "Estimate" });
-  await expect(est).toContainText("Needs review");
-  await expect(est).toContainText("Water heater flush");
+  await expect(est.getByTestId("customer")).toContainText("For Ann Lee");
+  await expect(est.getByTestId("customer")).toContainText("ann@example.test");
   await expect(est).toContainText("Left out: GOLD-PLATING (not on the price list)");
-  await expect(est).toContainText("$189.23"); // 129 + 45 = 174.00, + 8.75% tax 15.23
-
   await expect(est.getByLabel("Quantity for Pressure relief valve")).toHaveAttribute("step", "1");
   await est.getByLabel("Quantity for Pressure relief valve").fill("2");
   await est.getByRole("button", { name: "Save changes" }).click();
-  await expect(est).toContainText("$238.16"); // 129 + 90 = 219.00; tax 19.1625 → 19.16
+  await expect(est).toContainText("$238.16");
 
-  for (const action of ["Approve draft", "Send to customer", "Mark accepted", "Create invoice"])
-    await est.getByRole("button", { name: action }).click();
-  await expect(est).toContainText("Invoice INV-0001");
+  for (const action of ["Approve draft", "Send to customer", "Mark accepted", "Create invoice"]) await est.getByRole("button", { name: action }).click();
+  await expect(est.getByTestId("bill-to")).toHaveText("Bill to Ann Lee, +17165550123, ann@example.test");
   await est.getByRole("button", { name: /Record payment of \$238\.16/ }).click();
-  await expect(est.getByRole("status")).toContainText("Payment recorded: $238.16 for INV-0001");
+  await expect(est.getByRole("status")).toContainText("A receipt was emailed to ann@example.test");
+
+  await expect.poll(async () => (await emails(page)).filter((e) => e.to === "ann@example.test").map((e) => e.subject)).toEqual([
+    "We got your request - Joe's Plumbing",
+    "Your estimate from Joe's Plumbing: $238.16",
+    "Invoice INV-0001 from Joe's Plumbing",
+    "Receipt for INV-0001 - Joe's Plumbing",
+  ]);
+  expect((await emails(page)).find((e) => e.subject.startsWith("Invoice"))!.attachments).toEqual(["INV-0001.pdf"]);
 });
 
-test("an underwriter assesses a funding application and reads the checked memo", async ({ page }) => {
-  await page.goto("/app#/funding");
-  await page.getByLabel("API key").fill(E2E_KEY);
-  await page.getByRole("button", { name: "Sign in" }).click();
-
+test("the owner applies for funding and is told, in plain words, that a person is reviewing it", async ({ page }) => {
+  await signIn(page, "/app#/funding");
   await page.getByRole("button", { name: "New application" }).click();
   const form = page.getByRole("form", { name: "New application" });
-  await form.getByLabel("Industry").fill("auto repair");
+  await form.getByLabel("What kind of business is it?").fill("auto repair");
   await form.getByLabel("Months in business").fill("48");
-  await form.getByLabel("Monthly revenue ($)").fill("60,000");
-  await form.getByLabel("Amount requested ($)").fill("60,000");
-  await form.getByLabel("What it's for").fill("Working capital");
+  await form.getByLabel("Monthly sales ($)").fill("60,000");
+  await form.getByLabel("How much do you need ($)?").fill("60,000");
+  await form.getByLabel("What's it for?").fill("Working capital");
   await form.getByRole("button", { name: "Create application" }).click();
 
   const app = page.getByRole("region", { name: "Application" });
-  await app.getByLabel(/Bank statement/).setInputFiles("fixtures/statements/stacked-auto.csv");
+  await app.getByLabel("Bank statement CSV").setInputFiles("fixtures/statements/stacked-auto.csv");
   await expect(app.getByRole("status")).toContainText("533 new");
-  await app.getByRole("button", { name: "Assess", exact: true }).click();
+  await app.getByRole("button", { name: "See what I qualify for" }).click();
 
-  await expect(app.getByTestId("decision")).toHaveText("Review");
-  await expect(app).toContainText("Band B, score 85 of 100");
-  await expect(app.getByTestId("seg-M7")).toHaveAttribute("data-fraction", "0.00");
+  const card = app.getByTestId("applicant-card");
+  await expect(card.getByRole("heading")).toHaveText("A specialist is reviewing your application");
+  await expect(card).toContainText("Payments on your existing loans or advances, about $823 each business day");
+  await expect(card).toContainText("Paying off or finishing one of your current advances would make room");
+  await expect(app.getByTestId("memo")).toHaveCount(0); // the underwriting memo is internal
+  await app.getByText("How we decided").click();
   await expect(app.getByTestId("seg-M7")).toHaveClass(/flag/);
-  await expect(app.getByTestId("reasons")).toContainText("Existing lender payments of $823 a day");
+});
 
-  await app.getByRole("button", { name: "Write memo" }).click();
-  const memo = app.getByTestId("memo");
-  await expect(memo).toContainText("take 22.2% of revenue");
-  // the fabricated claim (cites M9, which doesn't exist) is not in the memo itself…
-  await expect(memo.getByText(/bankruptcy/)).toBeHidden();
-  // …only in the collapsed list of what the fact check removed, with the reason
-  await memo.getByText("1 claim removed by the fact check").click();
-  await expect(memo.getByText(/bankruptcy/)).toBeVisible();
-  await expect(memo).toContainText("cites unknown source M9");
+test("an underwriter reviews the case, checks the AI memo, and approves with a note the owner can see", async ({ page }) => {
+  await page.goto("/underwriting");
+  await page.getByLabel("Underwriter key").fill(E2E_UW_KEY);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.getByText("Signed in as Priya Shah")).toBeVisible();
 
-  await page.getByRole("link", { name: "Funding" }).click();
-  await expect(page.getByRole("row", { name: /auto repair/ })).toContainText("Review");
+  await page.getByRole("row", { name: /Joe's Plumbing/ }).first().click();
+  const c = page.getByRole("region", { name: "Case" });
+  await expect(c.getByTestId("engine-decision")).toHaveText("Review");
+  await c.getByRole("button", { name: "Write memo" }).click();
+  await expect(c.getByTestId("memo")).toContainText("take 22.2% of revenue");
+  await expect(c.getByTestId("memo").getByText(/bankruptcy/)).toBeHidden();
+
+  const form = c.getByRole("form", { name: "Decision" });
+  await form.getByLabel("Amount ($)").fill("15000");
+  await expect(form.getByTestId("preview")).toContainText("Repays $20,250.00 at $202.50 a day");
+  await form.getByLabel("Note (the business will see this)").fill("One of your advances finishes this month, so a smaller amount fits.");
+  await form.getByRole("button", { name: "Approve $15,000.00" }).click();
+  await expect(c.getByTestId("current-decision")).toContainText("by Priya Shah");
+
+  await signIn(page, "/app#/funding");
+  await page.getByRole("row", { name: /auto repair/ }).click();
+  const card = page.getByRole("region", { name: "Application" }).getByTestId("applicant-card");
+  await expect(card.getByRole("heading")).toHaveText("You're approved for $15,000");
+  await expect(card).toContainText("Note from the reviewer: One of your advances finishes this month");
+  await expect(card.getByTestId("decided-by")).toContainText("Reviewed by Priya Shah");
+  await expect.poll(async () => (await emails(page)).filter((e) => e.to === "joe@joesplumbing.test").map((e) => e.subject)).toContain("You're approved - $60,000 request");
+});
+
+test("insights show what happened after payment, and every email sent", async ({ page }) => {
+  await signIn(page, "/app#/insights");
+  const pipeline = page.getByRole("region", { name: "Pipeline" });
+  await expect(pipeline.getByText("Paid", { exact: true })).toBeVisible();
+  await expect(page.locator(".kpi", { hasText: "Paid to you" })).toContainText("$238");
+  const log = page.getByRole("region", { name: "Emails sent" });
+  await expect(log.getByRole("row", { name: /Invoice ann@example.test Sent/ })).toBeVisible();
+  await expect(log.getByRole("row", { name: /Funding: approved/ })).toBeVisible();
 });

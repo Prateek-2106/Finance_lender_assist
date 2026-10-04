@@ -111,6 +111,16 @@ function EstimateDetail({ id, onChange }: { id: string; onChange: () => void }) 
         <h3>Estimate from {day(e.createdAt)}</h3>
         <Status value={e.status} />
       </div>
+      {e.customer ? (
+        <div className="contact" data-testid="customer">
+          <strong>For {e.customer.name}</strong>
+          {e.customer.phone && <span>{e.customer.phone}</span>}
+          {e.customer.email && <span>{e.customer.email}</span>}
+          {!e.customer.email && <span className="quiet">No email on file, so estimates and invoices can't be emailed.</span>}
+        </div>
+      ) : (
+        <p className="quiet small">No customer attached.</p>
+      )}
 
       {e.aiDraft && (
         <div className="small" style={{ borderLeft: "3px solid var(--review)", paddingLeft: "0.75rem" }}>
@@ -185,6 +195,11 @@ function EstimateDetail({ id, onChange }: { id: string; onChange: () => void }) 
             <h3>Invoice {invoice.number}</h3>
             <Status value={invoice.status} />
           </div>
+          {invoice.billTo && (
+            <p className="small" data-testid="bill-to">
+              Bill to {invoice.billTo.name}{invoice.billTo.phone ? `, ${invoice.billTo.phone}` : ""}{invoice.billTo.email ? `, ${invoice.billTo.email}` : ""}
+            </p>
+          )}
           <div className="row">
             <button className="secondary" onClick={() => openPdf(`/invoices/${invoice.id}/pdf`).catch(setError)}>Open PDF</button>
             {invoice.status === "open" && <button disabled={busy} onClick={pay}>Record payment of {money(invoice.totals.totalCents)}</button>}
@@ -192,6 +207,7 @@ function EstimateDetail({ id, onChange }: { id: string; onChange: () => void }) 
           {receipt && (
             <p role="status">
               Payment recorded: {money(receipt.amountPaidCents)} for {receipt.invoiceNumber} on {day(receipt.paidAt)}.
+              {receipt.billTo?.email ? ` A receipt was emailed to ${receipt.billTo.email}.` : ""}
             </p>
           )}
         </div>

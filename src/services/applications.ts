@@ -1,4 +1,4 @@
-import type { FundingApplication, Id, Tenant, TxnCategory } from "../domain";
+import type { FundingApplication, FundingDecision, Id, Tenant, TxnCategory } from "../domain";
 import { InvalidTransitionError, NotFoundError, ValidationError } from "../errors";
 import type { Repos } from "../repos/types";
 import { assess } from "../risk/assess";
@@ -69,6 +69,19 @@ export async function assessApplication(repos: Repos, tenantId: Id, applicationI
   const app = await getApplication(repos, tenantId, applicationId);
   const txns = await repos.transactions.listByApplication(tenantId, applicationId);
   if (txns.length === 0) throw new ValidationError("Upload at least one bank statement before assessing");
+  if (app.decision?.decidedBy.kind === "underwriter")
+    throw new InvalidTransitionError(`Already decided by ${app.decision.decidedBy.name}; it can't be re-scored`);
   const assessment = assess(app, txns);
-  return repos.applications.update(tenantId, applicationId, { status: "assessed", assessment });
+  const decision: FundingDecision = {
+    outcome: assessment.decision === "approve" ? "approved" : assessment.decision === "decline" ? "declined" : "pending_review",
+    decidedBy: { kind: "scorecard", version: assessment.scorecardVersion },
+    at: assessment.assessedAt,
+    offer: assessment.decision === "approve" ? assessment.offer : null,
+  };
+  return repos.applications.update(tenantId, applicationId, {
+    status: "assessed",
+    assessment,
+    decision,
+    decisionLog: [...(app.decisionLog ?? []), decision],
+  });
 }

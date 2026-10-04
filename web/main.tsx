@@ -3,6 +3,8 @@ import { createRoot } from "react-dom/client";
 import "./styles.css";
 import { Site } from "./site/Site";
 import { Dashboard } from "./app/Dashboard";
+import { Console } from "./uw/Console";
 
-const isDashboard = location.pathname === "/app" || location.pathname.startsWith("/app/");
-createRoot(document.getElementById("root")!).render(<StrictMode>{isDashboard ? <Dashboard /> : <Site />}</StrictMode>);
+const at = (p: string) => location.pathname === p || location.pathname.startsWith(`${p}/`);
+const page = at("/underwriting") ? <Console /> : at("/app") ? <Dashboard /> : <Site />;
+createRoot(document.getElementById("root")!).render(<StrictMode>{page}</StrictMode>);

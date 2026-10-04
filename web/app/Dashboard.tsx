@@ -5,11 +5,13 @@ import { useHash } from "./useHash";
 import { Leads } from "./Leads";
 import { Estimates } from "./Estimates";
 import { Funding } from "./Funding";
+import { Insights } from "./Insights";
 
 const SECTIONS = [
   { id: "leads", name: "Leads" },
   { id: "estimates", name: "Estimates" },
   { id: "funding", name: "Funding" },
+  { id: "insights", name: "Insights" },
 ];
 
 export function Dashboard() {
@@ -52,6 +54,7 @@ export function Dashboard() {
         {section === "leads" && <Leads go={go} />}
         {section === "estimates" && <Estimates selected={parts[1]} go={go} />}
         {section === "funding" && <Funding selected={parts[1]} go={go} />}
+        {section === "insights" && <Insights />}
       </main>
     </div>
   );

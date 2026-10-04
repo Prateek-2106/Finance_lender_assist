@@ -14,6 +14,13 @@ export interface PriceItem {
   fractional?: boolean; // can be sold in parts (1.5 hours, 12.5 feet); otherwise whole units only
 }
 
+/** Who a job is for. Snapshotted onto estimates and invoices so later edits never change an issued document. */
+export interface Contact {
+  name: string;
+  phone?: string; // E.164
+  email?: string;
+}
+
 export interface CustomDomain {
   hostname: string; // e.g. "joesplumbing.com"
   status: "pending" | "verified";
@@ -27,6 +34,7 @@ export interface Tenant {
   customDomain?: CustomDomain;
   priceList: PriceItem[];
   taxRateBps: number;
+  ownerEmail?: string; // where new-lead and funding emails go
   apiKeyHash: string; // sha256 of the owner API key — never return this from the API
   createdAt: Date;
 }
@@ -44,7 +52,20 @@ export interface Lead {
   email?: string;
   message: string;
   source: LeadSource;
+  customerId?: Id; // the same person across jobs (matched by email or phone)
   createdAt: Date;
+}
+
+/** A person who has asked this business for work, possibly many times. */
+export interface Customer {
+  id: Id;
+  tenantId: Id;
+  name: string;
+  phone?: string;
+  email?: string;
+  leadCount: number;
+  createdAt: Date;
+  lastSeenAt: Date;
 }
 
 export interface LineItem {
@@ -76,6 +97,7 @@ export interface Estimate {
   lineItems: LineItem[];
   taxRateBps: number;
   status: EstimateStatus;
+  customer?: Contact; // from the lead, or entered by the owner
   notes?: string;
   aiDraft?: { model: string; questions: string[]; rejected: { sku: string; quantity: unknown; why: string }[] };
   createdAt: Date;
@@ -88,6 +110,7 @@ export interface Invoice {
   tenantId: Id;
   estimateId: Id;
   number: string; // per-tenant sequence: "INV-0001"
+  billTo?: Contact; // snapshot of the customer at conversion
   lineItems: LineItem[]; // snapshot of the estimate at conversion
   taxRateBps: number; // snapshot too: later tax changes never alter an issued invoice
   totals: Totals;
@@ -99,6 +122,7 @@ export interface Invoice {
 export interface Receipt {
   invoiceNumber: string;
   tenantName: string;
+  billTo?: Contact;
   amountPaidCents: number;
   paidAt: Date;
 }
@@ -118,7 +142,34 @@ export interface FundingApplication {
   status: ApplicationStatus;
   assessment?: import("./risk/assess").Assessment; // latest run of the risk engine
   memo?: import("./ai/memo").Memo; // AI underwriting memo, verified against the assessment
+  decision?: FundingDecision; // the current answer to the applicant
+  decisionLog?: FundingDecision[]; // every decision ever made, oldest first (audit trail)
   createdAt: Date;
+}
+
+/** Who decided, what, when and why. The scorecard decides clear cases; a named underwriter decides the rest. */
+export interface FundingDecision {
+  outcome: "approved" | "declined" | "pending_review";
+  decidedBy: { kind: "scorecard"; version: string } | { kind: "underwriter"; name: string };
+  at: Date;
+  note?: string; // required from underwriters
+  offer?: import("./risk/assess").Offer | null;
+}
+
+export type MessageStatus = "queued" | "sent" | "failed" | "skipped";
+
+/** Every email the platform tried to send: the "what did we tell the customer, and when" log. */
+export interface Message {
+  id: Id;
+  tenantId: Id;
+  template: string;
+  to?: string;
+  subject: string;
+  status: MessageStatus;
+  error?: string; // why it failed or was skipped
+  relatedId?: Id; // the lead, estimate, invoice or application it's about
+  createdAt: Date;
+  sentAt?: Date;
 }
 
 export type TxnCategory =

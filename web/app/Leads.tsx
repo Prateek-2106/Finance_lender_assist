@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
-import type { Lead } from "../../src/domain";
+import type { Customer, Lead } from "../../src/domain";
 import { api, day } from "../api";
 import { ErrorText } from "../ui/bits";
 
 export function Leads({ go }: { go: (path: string) => void }) {
   const [leads, setLeads] = useState<Lead[] | null>(null);
   const [drafting, setDrafting] = useState<string | null>(null);
+  const [customers, setCustomers] = useState<Map<string, Customer>>(new Map());
   const [error, setError] = useState<unknown>(null);
 
   useEffect(() => {
     api<{ leads: Lead[] }>("/leads").then((r) => setLeads(r.leads), setError);
+    api<{ customers: Customer[] }>("/customers").then((r) => setCustomers(new Map(r.customers.map((c) => [c.id, c]))), () => {});
   }, []);
 
   async function draft(lead: Lead) {
@@ -46,7 +48,12 @@ export function Leads({ go }: { go: (path: string) => void }) {
             {leads.map((l) => (
               <tr key={l.id}>
                 <td>
-                  <div>{l.name}</div>
+                  <div>
+                    {l.name}
+                    {l.customerId && (customers.get(l.customerId)?.leadCount ?? 0) > 1 && (
+                      <span className="badge">Returning, {customers.get(l.customerId)!.leadCount} requests</span>
+                    )}
+                  </div>
                   <div className="quiet small">{l.phone ?? l.email}{l.source === "sms" ? " (text)" : ""}</div>
                 </td>
                 <td style={{ maxWidth: "36rem" }}>{l.message}</td>

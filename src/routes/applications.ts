@@ -2,8 +2,9 @@ import express, { Router } from "express";
 import { z } from "zod";
 import type { Deps } from "../deps";
 import { getTenant, requireApiKey } from "../middleware/tenant";
-import { InvalidTransitionError, ServiceUnavailableError } from "../errors";
-import { writeMemo } from "../ai/memo";
+import type { Notifier } from "../notify/notifier";
+import { applicantView } from "../risk/applicantView";
+import type { FundingApplication } from "../domain";
 import { ApplicationCreateSchema, parseOrThrow } from "../schemas";
 import { assessApplication, createApplication, getApplication, ingestStatement, transactionSummary } from "../services/applications";
 
@@ -13,7 +14,7 @@ const CategoryQuery = z.object({
     .optional(),
 });
 
-export function applicationsRouter({ repos, llm }: Deps) {
+export function applicationsRouter({ repos }: Deps, notifier: Notifier) {
   const r = Router();
   r.use("/applications", requireApiKey);
   const id = (v: unknown) => String(v);
@@ -27,15 +28,13 @@ export function applicationsRouter({ repos, llm }: Deps) {
     // The list omits the heavy parts; GET /applications/:id has everything.
     const list = await repos.applications.listByTenant(getTenant(res).id);
     res.json({
-      applications: list.map(({ assessment, memo: _memo, ...a }) => ({
-        ...a,
-        ...(assessment ? { summary: { decision: assessment.decision, band: assessment.band, score: assessment.score } } : {}),
-      })),
+      applications: list.map(({ assessment: _a, memo: _m, decisionLog: _l, ...a }) => a),
     });
   });
 
   r.get("/applications/:id", async (req, res) => {
-    res.json({ application: await getApplication(repos, getTenant(res).id, id(req.params.id)) });
+    const app = await getApplication(repos, getTenant(res).id, id(req.params.id));
+    res.json(forOwner(app));
   });
 
   r.post(
@@ -48,17 +47,9 @@ export function applicationsRouter({ repos, llm }: Deps) {
   );
 
   r.post("/applications/:id/assess", async (req, res) => {
-    res.json({ application: await assessApplication(repos, getTenant(res).id, id(req.params.id)) });
-  });
-
-  r.post("/applications/:id/memo", async (req, res) => {
-    if (!llm) throw new ServiceUnavailableError("No language model configured (set LLM_PROVIDER)");
-    const tenantId = getTenant(res).id;
-    const app = await getApplication(repos, tenantId, id(req.params.id));
-    if (!app.assessment) throw new InvalidTransitionError("Assess the application before writing a memo");
-    const memo = await writeMemo(llm, app, app.assessment);
-    const saved = await repos.applications.update(tenantId, app.id, { memo });
-    res.json({ memo: saved.memo });
+    const app = await assessApplication(repos, getTenant(res).id, id(req.params.id));
+    void notifier.fundingDecision(app);
+    res.json(forOwner(app));
   });
 
   r.get("/applications/:id/transactions", async (req, res) => {
@@ -67,4 +58,10 @@ export function applicationsRouter({ repos, llm }: Deps) {
   });
 
   return r;
+}
+
+/** The business sees its decision in plain words and how it was scored, but not the internal underwriting memo. */
+function forOwner(app: FundingApplication) {
+  const { memo: _memo, ...rest } = app;
+  return { application: rest, applicantView: applicantView(app) };
 }

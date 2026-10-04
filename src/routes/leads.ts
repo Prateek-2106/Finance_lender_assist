@@ -3,15 +3,16 @@ import { z } from "zod";
 import type { Deps } from "../deps";
 import { InvalidTransitionError, NotFoundError, ServiceUnavailableError } from "../errors";
 import { draftEstimate } from "../ai/estimateDrafter";
-import { createEstimate } from "../services/billing";
+import { contactOf, createEstimate } from "../services/billing";
 import type { Estimate } from "../domain";
+import type { Notifier } from "../notify/notifier";
 import { computeTotals } from "../lib/money";
 import { getTenant, requireApiKey } from "../middleware/tenant";
 import { LeadCreateSchema, parseOrThrow, PriceListSchema } from "../schemas";
 
 const ListQuery = z.object({ limit: z.coerce.number().int().min(1).max(100).default(50) });
 
-export function leadsRouter({ repos, llm }: Deps) {
+export function leadsRouter({ repos, llm }: Deps, notifier: Notifier) {
   const r = Router();
   // Two clicks at once on one lead share one model call (per server process; the
   // open-estimate check below covers clicks that arrive after the first finished).
@@ -25,7 +26,10 @@ export function leadsRouter({ repos, llm }: Deps) {
 
   r.post("/leads", async (req, res) => {
     const input = parseOrThrow(LeadCreateSchema, req.body);
-    const lead = await repos.leads.create({ ...input, tenantId: getTenant(res).id, source: "web" });
+    const tenantId = getTenant(res).id;
+    const customer = await repos.customers.upsertByContact(tenantId, contactOf(input));
+    const lead = await repos.leads.create({ ...input, tenantId, source: "web", customerId: customer.id });
+    void notifier.leadReceived(getTenant(res), lead);
     res.status(201).json({ lead });
   });
 
