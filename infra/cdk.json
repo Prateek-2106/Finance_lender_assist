@@ -7,10 +7,11 @@
     ]
   },
   "context": {
-    "domainName": "",
-    "hostedZoneId": "",
+    "domainName": "vendorstreet.dev",
+    "hostedZoneId": "Z01663363BAT5VFVRAK16",
     "githubRepo": "Prateek-2106/vendorstreet",
     "@aws-cdk/aws-ecs:disableEcsImdsBlocking": true,
     "@aws-cdk/aws-ecs:enableImdsBlockingDeprecatedFeature": false
   }
 }
+
