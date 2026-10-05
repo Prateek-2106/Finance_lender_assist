@@ -9,7 +9,7 @@
   "context": {
     "domainName": "",
     "hostedZoneId": "",
-    "githubRepo": "Prateek-2106/mainstreet",
+    "githubRepo": "Prateek-2106/vendorstreet",
     "@aws-cdk/aws-ecs:disableEcsImdsBlocking": true,
     "@aws-cdk/aws-ecs:enableImdsBlockingDeprecatedFeature": false
   }
