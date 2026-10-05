@@ -73,7 +73,7 @@ export function underwritingRouter(deps: Deps, notifier: Notifier) {
   r.get("/applications/:id", async (req, res) => {
     const a = await load(String(req.params.id), res);
     const tenant = await repos.tenants.findById(a.tenantId);
-    // Platform revenue: what this business was actually paid through Mainstreet during the
+    // Platform revenue: what this business was actually paid through Vendor Street during the
     // statement period, next to what its bank shows. Context for the underwriter, not a score input.
     let platformRevenue = null;
     if (a.assessment) {

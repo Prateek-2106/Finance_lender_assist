@@ -40,7 +40,7 @@ function knockoutReason(k: Knockout, a: Assessment, app: FundingApplication) {
     case "time_in_business": {
       const months = KNOCKOUTS.minMonthsInBusiness - app.monthsInBusiness;
       return {
-        text: `Funding on Mainstreet needs at least ${KNOCKOUTS.minMonthsInBusiness} months in business. You've been operating for ${app.monthsInBusiness}.`,
+        text: `Funding on Vendor Street needs at least ${KNOCKOUTS.minMonthsInBusiness} months in business. You've been operating for ${app.monthsInBusiness}.`,
         whatWouldHelp: `You can apply again in about ${months} month${months === 1 ? "" : "s"}.`,
       };
     }

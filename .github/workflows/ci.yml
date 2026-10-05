@@ -44,8 +44,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: docker build -t mainstreet:ci .
-      - run: docker run -d --name app -p 3000:3000 -e LLM_PROVIDER=none mainstreet:ci
+      - run: docker build -t vendorstreet:ci .
+      - run: docker run -d --name app -p 3000:3000 -e LLM_PROVIDER=none vendorstreet:ci
       - run: |
           for i in $(seq 1 30); do curl -fsS localhost:3000/health && exit 0; sleep 1; done
           docker logs app; exit 1
@@ -88,13 +88,13 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
       - name: Build and push the image (tagged with the commit)
         run: |
-          IMAGE=${{ steps.ecr.outputs.registry }}/mainstreet
+          IMAGE=${{ steps.ecr.outputs.registry }}/vendorstreet
           docker build -t $IMAGE:${{ github.sha }} -t $IMAGE:latest .
           docker push --all-tags $IMAGE
       - name: Restart the app on the instance with the new image
         run: |
           CMD_ID=$(aws ssm send-command --instance-ids "${{ vars.INSTANCE_ID }}" --document-name AWS-RunShellScript \
-            --comment "deploy ${{ github.sha }}" --parameters 'commands=["/opt/mainstreet/run.sh ${{ github.sha }}"]' \
+            --comment "deploy ${{ github.sha }}" --parameters 'commands=["/opt/vendorstreet/run.sh ${{ github.sha }}"]' \
             --query Command.CommandId --output text)
           for i in $(seq 1 60); do
             STATUS=$(aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "${{ vars.INSTANCE_ID }}" --query Status --output text 2>/dev/null || echo Pending)

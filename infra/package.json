@@ -1,5 +1,5 @@
 {
-  "name": "mainstreet-infra",
+  "name": "vendorstreet-infra",
   "private": true,
   "type": "module",
   "scripts": {

@@ -37,7 +37,7 @@ export function Console() {
   const [checked, setChecked] = useState(false);
   const [parts, go] = useHash();
   useEffect(() => {
-    document.title = "Underwriting · Mainstreet";
+    document.title = "Underwriting · Vendor Street";
     if (!uwSession.get()) return setChecked(true);
     uw<{ name: string; demoOnly?: boolean }>("/me").then((r) => { setMe(r.name); setDemoOnly(!!r.demoOnly); }, () => uwSession.clear()).finally(() => setChecked(true));
   }, []);
@@ -79,7 +79,7 @@ function SignIn({ onDone }: { onDone: (me: { name: string; demoOnly?: boolean })
   }
   return (
     <div className="site">
-      <header><h1>Underwriting</h1><p className="quiet">For Mainstreet staff who decide funding applications that need a person.</p></header>
+      <header><h1>Underwriting</h1><p className="quiet">For Vendor Street staff who decide funding applications that need a person.</p></header>
       <form className="stack" onSubmit={submit}>
         <label>Underwriter key<input name="key" required autoComplete="off" spellCheck={false} /></label>
         <ErrorText error={error} />
@@ -170,7 +170,7 @@ function Case({ id, onDecided }: { id: string; onDecided: () => void }) {
       {a.assessment && <div data-tour="risk"><RiskBreakdown a={a.assessment} /></div>}
       {pr && (
         <div className="small" style={{ borderLeft: "3px solid var(--rule-strong)", paddingLeft: "0.75rem" }} data-testid="platform-revenue">
-          <strong>Paid through Mainstreet</strong> during the statement period: {money(pr.paidCents)} from {pr.paidInvoices} invoice{pr.paidInvoices === 1 ? "" : "s"},
+          <strong>Paid through Vendor Street</strong> during the statement period: {money(pr.paidCents)} from {pr.paidInvoices} invoice{pr.paidInvoices === 1 ? "" : "s"},
           {" "}{pr.shareOfBankRevenue === null ? "" : `${pct(pr.shareOfBankRevenue, 1)} of the ${dollars(pr.bankRevenueCents)} in sales the bank shows`}. Context only; not part of the score.
         </div>
       )}

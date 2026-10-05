@@ -19,7 +19,7 @@ services:
     build: .
     ports: ["3000:3000"]
     environment:
-      MONGO_URL: mongodb://mongo:27017/mainstreet
+      MONGO_URL: mongodb://mongo:27017/vendorstreet
       BASE_DOMAIN: lvh.me
       PUBLIC_URL: http://localhost:3000
       LLM_PROVIDER: ollama

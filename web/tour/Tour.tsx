@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { TOURS, type PageId, type Step } from "./steps";
 
-const SEEN = (page: PageId) => `mainstreet.tour.seen.${page}`;
+const SEEN = (page: PageId) => `vendorstreet.tour.seen.${page}`;
 const seen = (page: PageId) => {
   try {
     return localStorage.getItem(SEEN(page)) === "1";

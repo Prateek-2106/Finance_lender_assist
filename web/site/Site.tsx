@@ -24,7 +24,7 @@ export function Site() {
     return (
       <div className="site">
         <h1>No business here yet</h1>
-        <p className="quiet">This address isn't connected to a business on Mainstreet.</p>
+        <p className="quiet">This address isn't connected to a business on Vendor Street.</p>
       </div>
     );
   if (!site) return null;

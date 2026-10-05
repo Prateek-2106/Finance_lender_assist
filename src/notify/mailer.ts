@@ -21,7 +21,7 @@ export interface Mailer {
  */
 export async function mailerFromEnv(env: NodeJS.ProcessEnv): Promise<Mailer | undefined> {
   const mode = (env.MAIL_TRANSPORT ?? (env.NODE_ENV === "production" ? "none" : "smtp")).toLowerCase();
-  const from = env.MAIL_FROM ?? "Mainstreet <no-reply@mainstreet.local>";
+  const from = env.MAIL_FROM ?? "Vendor Street <no-reply@vendorstreet.local>";
   if (mode === "none") return undefined;
   let transport: Transport;
   let name: string;

@@ -7,9 +7,9 @@ function keyStore(name: string) {
   };
 }
 /** The business owner's key, for this business's address. */
-export const session = keyStore("mainstreet.apiKey");
+export const session = keyStore("vendorstreet.apiKey");
 /** An underwriter's key, for the platform-wide console. Kept separately on purpose. */
-export const uwSession = keyStore("mainstreet.underwriterKey");
+export const uwSession = keyStore("vendorstreet.underwriterKey");
 
 /**
  * "#key=sk_…" in the address (the "Try it" button, the demo underwriter link): keep the key for

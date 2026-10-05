@@ -35,7 +35,7 @@ export function Home({ platform }: { platform: Platform }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   useEffect(() => {
-    document.title = "Mainstreet · run a small business, get funded";
+    document.title = "Vendor Street · run a small business, get funded";
   }, []);
 
   async function start() {
@@ -53,7 +53,7 @@ export function Home({ platform }: { platform: Platform }) {
   return (
     <div className="home">
       <header className="hero" data-tour="hero">
-        <p className="eyebrow">Mainstreet</p>
+        <p className="eyebrow">Vendor Street</p>
         <h1>A website, quotes, invoices and funding for a small business, in one place.</h1>
         <p className="lede">
           A plumber gets a website that takes requests, drafts quotes with AI, sends invoices and records payments. When they need money for a new van, the

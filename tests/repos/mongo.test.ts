@@ -19,7 +19,7 @@ describe.skipIf(!url)("mongodb", () => {
   });
   // Fresh database per test so tests can't leak into each other.
   repoContract("mongodb", async () => {
-    const name = `mainstreet_test_${process.pid}_${dbs.length}`;
+    const name = `vendorstreet_test_${process.pid}_${dbs.length}`;
     dbs.push(name);
     return createMongoRepos(client.db(name));
   });

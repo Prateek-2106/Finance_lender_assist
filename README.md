@@ -1,4 +1,4 @@
-# Mainstreet
+# Vendor Street
 
 A multi-tenant platform for micro-businesses: a website per business, lead capture over web and SMS, estimates, invoices and receipts, and a funding application with an explainable risk assessment.
 
@@ -9,7 +9,7 @@ Stack: Node 22, Express 5, TypeScript, zod, MongoDB, React (step 9), AWS (step 1
 ```powershell
 npm install
 docker compose up -d                      # MongoDB on localhost:27017
-$env:MONGO_URL = "mongodb://localhost:27017/mainstreet"
+$env:MONGO_URL = "mongodb://localhost:27017/vendorstreet"
 npm test                                  # all tests, including the MongoDB contract suite
 npm run dev                               # API on http://localhost:3000
 ```
@@ -162,7 +162,7 @@ Two profiles, same app:
 |---|---|---|
 | Path | CloudFront → one EC2 instance (Docker image from ECR) | ALB → ECS Fargate |
 | TLS | CloudFront, `*.domain` cert | ALB, `*.domain` cert |
-| Deploys | GitHub Actions: build → ECR → SSM runs `/opt/mainstreet/run.sh <sha>` | GitHub Actions: `cdk deploy`, rolling with automatic rollback |
+| Deploys | GitHub Actions: build → ECR → SSM runs `/opt/vendorstreet/run.sh <sha>` | GitHub Actions: `cdk deploy`, rolling with automatic rollback |
 | Cost | about $12/month (t3.micro ~$7.60, Elastic IP ~$3.65, Route 53 $0.50; CloudFront and SES stay in the free tier at demo traffic) | about $35–45/month (ALB alone ~$16 + LCUs) |
 | Trade-off | a deploy restarts the container (a few seconds down); CloudFront → instance is HTTP, limited to CloudFront's address ranges plus a secret header | no single machine; more to pay for |
 
@@ -181,15 +181,15 @@ Everything below is PowerShell, from the repo root, with the AWS CLI signed in t
 3. **Anthropic.** console.anthropic.com → create an API key → Billing → set a **monthly spend limit** (e.g. $10). The app also caps itself at 300 AI calls a day (25 per business).
 4. **Settings in SSM** (SecureString for secrets; plain String for the origin header CloudFront must read). Don't put quotes inside the values.
    ```powershell
-   $p = "/mainstreet"
-   aws ssm put-parameter --name $p/MONGO_URL --type SecureString --value "mongodb+srv://USER:PASS@cluster0.xxxxx.mongodb.net/mainstreet?retryWrites=true&w=majority"
+   $p = "/vendorstreet"
+   aws ssm put-parameter --name $p/MONGO_URL --type SecureString --value "mongodb+srv://USER:PASS@cluster0.xxxxx.mongodb.net/vendorstreet?retryWrites=true&w=majority"
    aws ssm put-parameter --name $p/ANTHROPIC_API_KEY --type SecureString --value "sk-ant-..."
    aws ssm put-parameter --name $p/ADMIN_TOKEN --type SecureString --value ([guid]::NewGuid().ToString("N") + [guid]::NewGuid().ToString("N"))
    aws ssm put-parameter --name $p/UNDERWRITERS --type SecureString --value ("Prateek Ghosh=uw_" + [guid]::NewGuid().ToString("N"))
    aws ssm put-parameter --name $p/ORIGIN_SECRET --type String --value ([guid]::NewGuid().ToString("N"))
    # optional: aws ssm put-parameter --name $p/TWILIO_AUTH_TOKEN --type SecureString --value "..."
    ```
-   Read one back with `aws ssm get-parameter --name /mainstreet/ADMIN_TOKEN --with-decryption --query Parameter.Value --output text`.
+   Read one back with `aws ssm get-parameter --name /vendorstreet/ADMIN_TOKEN --with-decryption --query Parameter.Value --output text`.
 5. **CDK bootstrap**, once per account and region:
    ```powershell
    cd infra; npm ci
@@ -208,18 +208,18 @@ GitHub → Settings → Secrets and variables → Actions:
 - variable `DEPLOY` = `economy`
 - variable `INSTANCE_ID` = the `InstanceId` output
 
-Push to `main`. After tests, e2e, the image check and the infra tests pass, `deploy-economy` builds the image, pushes it to ECR tagged with the commit, runs `/opt/mainstreet/run.sh <sha>` on the instance through SSM, and smoke-tests `https://yourdomain.com/health`, `/api/platform`, and that `http://origin.yourdomain.com` refuses direct visitors.
+Push to `main`. After tests, e2e, the image check and the infra tests pass, `deploy-economy` builds the image, pushes it to ECR tagged with the commit, runs `/opt/vendorstreet/run.sh <sha>` on the instance through SSM, and smoke-tests `https://yourdomain.com/health`, `/api/platform`, and that `http://origin.yourdomain.com` refuses direct visitors.
 
 ### Check it
 Open `https://yourdomain.com` → **Try it**. To create a real business (sign-up is closed to visitors):
 ```powershell
-$admin = aws ssm get-parameter --name /mainstreet/ADMIN_TOKEN --with-decryption --query Parameter.Value --output text
+$admin = aws ssm get-parameter --name /vendorstreet/ADMIN_TOKEN --with-decryption --query Parameter.Value --output text
 Invoke-RestMethod -Method Post https://yourdomain.com/api/tenants -Headers @{ Authorization = "Bearer $admin" } -ContentType application/json -Body '{"name":"Joe''s Plumbing","taxRateBps":875}'
 ```
 
 ### Run, look, fix
-- Logs: `aws logs tail /mainstreet/web --follow`
-- Shell on the machine (no SSH, no open port 22): `aws ssm start-session --target <InstanceId>` (needs the Session Manager plugin), then `sudo docker ps`, `sudo /opt/mainstreet/run.sh` to restart, `sudo /opt/mainstreet/run.sh <older-sha>` to roll back.
+- Logs: `aws logs tail /vendorstreet/web --follow`
+- Shell on the machine (no SSH, no open port 22): `aws ssm start-session --target <InstanceId>` (needs the Session Manager plugin), then `sudo docker ps`, `sudo /opt/vendorstreet/run.sh` to restart, `sudo /opt/vendorstreet/run.sh <older-sha>` to roll back.
 - Changed a setting in SSM? Restart with `run.sh` so the container reads it again.
 - **Email:** new SES accounts are in the *sandbox*: mail only reaches verified addresses. Demo businesses never send mail anyway. For real mail, SES → Account dashboard → Request production access.
 
@@ -243,7 +243,7 @@ Invoke-RestMethod -Method Patch "$base/settings" -Headers $k -ContentType "appli
 **Funding decisions say who decided.** Clear cases are decided by the scorecard; "review" cases wait for a named underwriter in the console:
 
 - http://localhost:3000/underwriting, demo key `uw_dev_priya_0001` (Priya Shah). Set `UNDERWRITERS="Name=key;Name2=key2"` for your own.
-- Queue across every business, oldest first. Full risk breakdown, AI memo (fact-checked), invoices paid through Mainstreet vs bank revenue, and a decision form that previews the daily payment, total repayment load and APR.
+- Queue across every business, oldest first. Full risk breakdown, AI memo (fact-checked), invoices paid through Vendor Street vs bank revenue, and a decision form that previews the daily payment, total repayment load and APR.
 - Approve with an amount, or decline. A note is required, and the business sees it. Every decision is kept in a log.
 
 **Plain words for the applicant.** The owner sees the decision first: amount, total repayment, daily payment, months, **estimated APR**, and for every reason, what would help. Written by code from the same numbers as the decision. The scoring sits under "How we decided"; the memo stays internal.

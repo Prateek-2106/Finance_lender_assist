@@ -13,7 +13,7 @@ const p = (s: string) => `<p style="margin:0 0 12px">${esc(s)}</p>`;
 const wrap = (business: string, body: string) =>
   `<div style="font-family:Segoe UI,Arial,sans-serif;color:#12343b;max-width:560px;line-height:1.5">` +
   `<p style="font-size:18px;font-weight:700;margin:0 0 16px">${esc(business)}</p>${body}` +
-  `<p style="color:#4f6468;font-size:12px;margin-top:24px">Sent by Mainstreet on behalf of ${esc(business)}.</p></div>`;
+  `<p style="color:#4f6468;font-size:12px;margin-top:24px">Sent by Vendor Street on behalf of ${esc(business)}.</p></div>`;
 
 function itemsTable(e: Pick<Estimate, "lineItems" | "taxRateBps">) {
   const t = computeTotals(e.lineItems, e.taxRateBps);

@@ -37,7 +37,7 @@ describe("the review queue", () => {
     expect(body.recent.map((r: { business: string }) => r.business)).toEqual(["Rosa's Bakery"]); // decided automatically
   });
 
-  it("the detail compares the bank's revenue with invoices paid through Mainstreet", async () => {
+  it("the detail compares the bank's revenue with invoices paid through Vendor Street", async () => {
     const { app, inflated } = await setup();
     const { body } = await request(app).get(`/api/underwriting/applications/${inflated.id}`).set(asUnderwriter());
     expect(body.business.name).toBe("Summit Contracting");

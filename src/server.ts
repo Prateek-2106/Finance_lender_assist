@@ -59,7 +59,7 @@ async function main() {
   if (demoEnabled) scheduleDemoCleanup(repos);
 
   app.listen(PORT, () => {
-    console.log(`mainstreet on http://localhost:${PORT} (${MONGO_URL ? "MongoDB" : "in-memory store"})`);
+    console.log(`vendorstreet on http://localhost:${PORT} (${MONGO_URL ? "MongoDB" : "in-memory store"})`);
     console.log(`tenant sites: http://<subdomain>.lvh.me:${PORT}`);
     console.log(`language model: ${llm?.model ?? "none"}`);
     console.log(`email: ${mailer?.name ?? "off"}${mailer?.name.startsWith("smtp localhost") ? "  (inbox: http://localhost:8025)" : ""}`);

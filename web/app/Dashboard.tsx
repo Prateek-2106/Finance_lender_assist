@@ -26,7 +26,7 @@ export function Dashboard() {
   useEffect(() => {
     api<{ site: { name: string } }>("/site").then((r) => {
       setSite(r.site);
-      document.title = `${r.site.name} · Mainstreet`;
+      document.title = `${r.site.name} · Vendor Street`;
     });
   }, []);
 
@@ -82,7 +82,7 @@ function SignIn({ name, onDone }: { name?: string; onDone: () => void }) {
   return (
     <div className="site">
       <header>
-        <h1>{name ?? "Mainstreet"}</h1>
+        <h1>{name ?? "Vendor Street"}</h1>
         <p className="quiet">Sign in with the API key you got when you created this business.</p>
       </header>
       <form className="stack" onSubmit={submit}>

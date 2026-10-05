@@ -1,5 +1,5 @@
 {
-  "app": "npx tsx bin/mainstreet.ts",
+  "app": "npx tsx bin/vendorstreet.ts",
   "watch": {
     "include": [
       "bin",

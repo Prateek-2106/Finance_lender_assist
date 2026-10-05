@@ -43,7 +43,7 @@ describe("customer-owned domains", () => {
     const { domain } = res.body;
     expect(domain).toMatchObject({ hostname: "www.joesplumbing.com", status: "pending" });
     expect(domain.records[0]).toMatchObject({ type: "TXT", name: `${TXT_PREFIX}.www.joesplumbing.com` });
-    expect(domain.records[0].value).toMatch(/^mainstreet-verify=[0-9a-f]{32}$/);
+    expect(domain.records[0].value).toMatch(/^vendorstreet-verify=[0-9a-f]{32}$/);
     expect(domain.records[1]).toMatchObject({ type: "CNAME", value: `joes-plumbing.${BASE}` });
   });
 
@@ -70,10 +70,10 @@ describe("customer-owned domains", () => {
     expect(missing.status).toBe(422);
     expect(missing.body.error).toMatch(/No TXT record found/);
 
-    dns.zone[`${TXT_PREFIX}.joesplumbing.com`] = [["mainstreet-verify=someone-elses-token"]];
+    dns.zone[`${TXT_PREFIX}.joesplumbing.com`] = [["vendorstreet-verify=someone-elses-token"]];
     const wrong = await request(app).post("/api/domains/verify").set(as(joe));
     expect(wrong.status).toBe(422);
-    expect(wrong.body.found).toEqual(["mainstreet-verify=someone-elses-token"]);
+    expect(wrong.body.found).toEqual(["vendorstreet-verify=someone-elses-token"]);
   });
 
   it("a DNS outage is a 503, not a failed verification", async () => {

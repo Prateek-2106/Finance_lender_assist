@@ -7,8 +7,8 @@ import { InvalidTransitionError, NotFoundError, ServiceUnavailableError } from "
 import { getTenant, requireApiKey } from "../middleware/tenant";
 import { parseOrThrow } from "../schemas";
 
-export const TXT_PREFIX = "_mainstreet-verify";
-const tokenValue = (token: string) => `mainstreet-verify=${token}`;
+export const TXT_PREFIX = "_vendorstreet-verify";
+const tokenValue = (token: string) => `vendorstreet-verify=${token}`;
 
 /** A real public hostname: 2+ labels, letters/digits/hyphens, no IPs, no ports. */
 export const HostnameSchema = z

@@ -1,16 +1,16 @@
 import * as cdk from "aws-cdk-lib";
 import { Match, Template } from "aws-cdk-lib/assertions";
-import { MainstreetStack } from "../lib/mainstreet-stack.js";
+import { VendorStreetStack } from "../lib/vendorstreet-stack.js";
 
 let t: Template;
 beforeAll(() => {
   const app = new cdk.App();
-  const stack = new MainstreetStack(app, "Test", {
+  const stack = new VendorStreetStack(app, "Test", {
     env: { account: "123456789012", region: "us-east-1" },
-    domainName: "example-mainstreet.com",
+    domainName: "example-vendorstreet.com",
     hostedZoneId: "Z0000000EXAMPLE",
     githubRepo: "Prateek-2106/mainstreet",
-    secrets: { mongoUrl: "/mainstreet/MONGO_URL" },
+    secrets: { mongoUrl: "/vendorstreet/MONGO_URL" },
   });
   t = Template.fromStack(stack);
 }, 120_000);
@@ -18,8 +18,8 @@ beforeAll(() => {
 describe("traffic", () => {
   it("serves HTTPS with one certificate for the domain and every tenant subdomain", () => {
     t.hasResourceProperties("AWS::CertificateManager::Certificate", {
-      DomainName: "example-mainstreet.com",
-      SubjectAlternativeNames: ["*.example-mainstreet.com"],
+      DomainName: "example-vendorstreet.com",
+      SubjectAlternativeNames: ["*.example-vendorstreet.com"],
       ValidationMethod: "DNS",
     });
     t.hasResourceProperties("AWS::ElasticLoadBalancingV2::Listener", { Port: 443, Protocol: "HTTPS", Certificates: Match.anyValue() });
@@ -32,8 +32,8 @@ describe("traffic", () => {
   });
   it("points the apex and the wildcard at the load balancer", () => {
     t.resourceCountIs("AWS::Route53::RecordSet", 5); // + 3 DKIM records for email
-    t.hasResourceProperties("AWS::Route53::RecordSet", { Name: "example-mainstreet.com.", Type: "A" });
-    t.hasResourceProperties("AWS::Route53::RecordSet", { Name: "*.example-mainstreet.com.", Type: "A" });
+    t.hasResourceProperties("AWS::Route53::RecordSet", { Name: "example-vendorstreet.com.", Type: "A" });
+    t.hasResourceProperties("AWS::Route53::RecordSet", { Name: "*.example-vendorstreet.com.", Type: "A" });
   });
   it("health-checks /health", () => {
     t.hasResourceProperties("AWS::ElasticLoadBalancingV2::TargetGroup", { HealthCheckPath: "/health", Port: 80 });
@@ -56,12 +56,12 @@ describe("service", () => {
       Memory: "512",
       ContainerDefinitions: [
         Match.objectLike({
-          Environment: Match.arrayWith([{ Name: "BASE_DOMAIN", Value: "example-mainstreet.com" }, { Name: "PUBLIC_URL", Value: "https://example-mainstreet.com" }]),
+          Environment: Match.arrayWith([{ Name: "BASE_DOMAIN", Value: "example-vendorstreet.com" }, { Name: "PUBLIC_URL", Value: "https://example-vendorstreet.com" }]),
           Secrets: [
             {
               Name: "MONGO_URL",
               // an SSM parameter ARN, joined at deploy time so the partition resolves
-              ValueFrom: { "Fn::Join": ["", Match.arrayWith([Match.stringLikeRegexp(":ssm:us-east-1:123456789012:parameter/mainstreet/MONGO_URL$")])] },
+              ValueFrom: { "Fn::Join": ["", Match.arrayWith([Match.stringLikeRegexp(":ssm:us-east-1:123456789012:parameter/vendorstreet/MONGO_URL$")])] },
             },
           ],
         }),
@@ -78,7 +78,7 @@ describe("service", () => {
 
 describe("email", () => {
   it("verifies the domain with SES (DKIM in Route 53) and lets only the task send from it", () => {
-    t.hasResourceProperties("AWS::SES::EmailIdentity", { EmailIdentity: "example-mainstreet.com" });
+    t.hasResourceProperties("AWS::SES::EmailIdentity", { EmailIdentity: "example-vendorstreet.com" });
     t.resourceCountIs("AWS::Route53::RecordSet", 5); // apex, wildcard, 3 DKIM CNAMEs
     t.hasResourceProperties("AWS::IAM::Policy", {
       PolicyDocument: Match.objectLike({

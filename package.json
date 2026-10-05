@@ -1,5 +1,5 @@
 {
-  "name": "mainstreet",
+  "name": "vendorstreet",
   "version": "0.1.0",
   "description": "Multi-tenant platform for micro-businesses: website, lead capture, estimates, invoices, and funding risk assessment.",
   "scripts": {

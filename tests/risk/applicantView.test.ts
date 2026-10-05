@@ -51,7 +51,7 @@ describe("what the applicant sees", () => {
   it("too new: says when they can apply again", async () => {
     const { applicantView: v } = await viewFor("new-food-truck");
     expect(v.reasons[0]).toEqual({
-      text: "Funding on Mainstreet needs at least 6 months in business. You've been operating for 4.",
+      text: "Funding on Vendor Street needs at least 6 months in business. You've been operating for 4.",
       whatWouldHelp: "You can apply again in about 2 months.",
     });
   });

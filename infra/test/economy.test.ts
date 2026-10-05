@@ -8,7 +8,7 @@ beforeAll(() => {
   const app = new cdk.App();
   const stack = new EconomyStack(app, "Eco", {
     env: { account: "123456789012", region: "us-east-1" },
-    domainName: "example-mainstreet.com",
+    domainName: "example-vendorstreet.com",
     hostedZoneId: "Z0000000EXAMPLE",
     githubRepo: "Prateek-2106/mainstreet",
   });
@@ -27,10 +27,10 @@ describe("economy profile", () => {
   });
 
   it("serves the domain and every tenant subdomain through CloudFront with one certificate", () => {
-    t.hasResourceProperties("AWS::CertificateManager::Certificate", { DomainName: "example-mainstreet.com", SubjectAlternativeNames: ["*.example-mainstreet.com"] });
+    t.hasResourceProperties("AWS::CertificateManager::Certificate", { DomainName: "example-vendorstreet.com", SubjectAlternativeNames: ["*.example-vendorstreet.com"] });
     t.hasResourceProperties("AWS::CloudFront::Distribution", {
       DistributionConfig: Match.objectLike({
-        Aliases: ["example-mainstreet.com", "*.example-mainstreet.com"],
+        Aliases: ["example-vendorstreet.com", "*.example-vendorstreet.com"],
         ViewerCertificate: Match.objectLike({ MinimumProtocolVersion: "TLSv1.2_2021", SslSupportMethod: "sni-only" }),
         DefaultCacheBehavior: Match.objectLike({
           ViewerProtocolPolicy: "redirect-to-https",
@@ -40,23 +40,23 @@ describe("economy profile", () => {
         CacheBehaviors: [Match.objectLike({ PathPattern: "/assets/*", CachePolicyId: "658327ea-f89d-4fab-a63d-7e88639e58f6" })], // CachingOptimized
       }),
     });
-    t.hasResourceProperties("AWS::Route53::RecordSet", { Name: "example-mainstreet.com.", Type: "A", AliasTarget: Match.anyValue() });
-    t.hasResourceProperties("AWS::Route53::RecordSet", { Name: "*.example-mainstreet.com.", Type: "A", AliasTarget: Match.anyValue() });
+    t.hasResourceProperties("AWS::Route53::RecordSet", { Name: "example-vendorstreet.com.", Type: "A", AliasTarget: Match.anyValue() });
+    t.hasResourceProperties("AWS::Route53::RecordSet", { Name: "*.example-vendorstreet.com.", Type: "A", AliasTarget: Match.anyValue() });
   });
 
   it("CloudFront talks to origin.<domain> with a secret header the app checks", () => {
     t.hasResourceProperties("AWS::CloudFront::Distribution", {
       DistributionConfig: Match.objectLike({
         Origins: [Match.objectLike({
-          DomainName: "origin.example-mainstreet.com",
+          DomainName: "origin.example-vendorstreet.com",
           CustomOriginConfig: Match.objectLike({ OriginProtocolPolicy: "http-only" }),
           OriginCustomHeaders: [Match.objectLike({ HeaderName: "X-Origin-Verify" })],
         })],
       }),
     });
-    t.hasResourceProperties("AWS::Route53::RecordSet", { Name: "origin.example-mainstreet.com.", Type: "A" });
+    t.hasResourceProperties("AWS::Route53::RecordSet", { Name: "origin.example-vendorstreet.com.", Type: "A" });
     const params = t.toJSON().Parameters as Record<string, { Default?: string }>;
-    expect(Object.values(params).some((p) => p.Default === "/mainstreet/ORIGIN_SECRET")).toBe(true);
+    expect(Object.values(params).some((p) => p.Default === "/vendorstreet/ORIGIN_SECRET")).toBe(true);
   });
 
   it("the machine only accepts HTTP from CloudFront, and has no SSH", () => {
@@ -69,18 +69,18 @@ describe("economy profile", () => {
   });
 
   it("boots into Docker and the run script, with production settings", () => {
-    for (const s of ["dnf install -y docker", "/opt/mainstreet/run.sh", "get-parameters-by-path", "--path /mainstreet/", "TRUST_PROXY_HOPS=1", "OPEN_SIGNUP=false", "ANTHROPIC_MODEL=claude-haiku-4-5-20251001", "MAIL_TRANSPORT=ses", "awslogs-group="])
+    for (const s of ["dnf install -y docker", "/opt/vendorstreet/run.sh", "get-parameters-by-path", "--path /vendorstreet/", "TRUST_PROXY_HOPS=1", "OPEN_SIGNUP=false", "ANTHROPIC_MODEL=claude-haiku-4-5-20251001", "MAIL_TRANSPORT=ses", "awslogs-group="])
       expect(userData).toContain(s);
   });
 
-  it("the machine can read only /mainstreet/* settings, pull its image and send mail as the domain", () => {
+  it("the machine can read only /vendorstreet/* settings, pull its image and send mail as the domain", () => {
     t.hasResourceProperties("AWS::IAM::Policy", {
-      PolicyDocument: { Statement: Match.arrayWith([Match.objectLike({ Action: ["ssm:GetParametersByPath", "ssm:GetParameter"], Resource: Match.arrayWith([Match.stringLikeRegexp(":parameter/mainstreet/\\*")]) })]) },
+      PolicyDocument: { Statement: Match.arrayWith([Match.objectLike({ Action: ["ssm:GetParametersByPath", "ssm:GetParameter"], Resource: Match.arrayWith([Match.stringLikeRegexp(":parameter/vendorstreet/\\*")]) })]) },
     });
     t.hasResourceProperties("AWS::IAM::Policy", {
       PolicyDocument: { Statement: Match.arrayWith([Match.objectLike({ Action: ["ses:SendEmail", "ses:SendRawEmail"] })]) },
     });
-    t.hasResourceProperties("AWS::ECR::Repository", { RepositoryName: "mainstreet", LifecyclePolicy: Match.anyValue() });
+    t.hasResourceProperties("AWS::ECR::Repository", { RepositoryName: "vendorstreet", LifecyclePolicy: Match.anyValue() });
   });
 
   it("GitHub on main may push the image and run the deploy command on this one machine, nothing else", () => {

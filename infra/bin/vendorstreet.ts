@@ -1,5 +1,5 @@
 import * as cdk from "aws-cdk-lib";
-import { MainstreetStack } from "../lib/mainstreet-stack.js";
+import { VendorStreetStack } from "../lib/vendorstreet-stack.js";
 import { EconomyStack } from "../lib/economy-stack.js";
 
 const app = new cdk.App();
@@ -12,17 +12,17 @@ const env = { account: process.env.CDK_DEFAULT_ACCOUNT, region: process.env.CDK_
 // profile=economy (default): CloudFront + one EC2 instance, ~$12/month.
 // profile=full: load balancer + Fargate, ~$40/month. `npx cdk deploy -c profile=full`
 if ((ctx("profile") ?? "economy") === "economy") {
-  new EconomyStack(app, "MainstreetEconomy", {
+  new EconomyStack(app, "VendorStreetEconomy", {
     env: { ...env, region: "us-east-1" },
     domainName,
     hostedZoneId,
     githubRepo: ctx("githubRepo"),
     githubOidcProviderArn: ctx("githubOidcProviderArn"),
     instanceType: ctx("instanceType"),
-    tags: { project: "mainstreet" },
+    tags: { project: "vendorstreet" },
   });
 } else {
-  new MainstreetStack(app, "Mainstreet", {
+  new VendorStreetStack(app, "VendorStreet", {
     env,
     domainName,
     hostedZoneId,
@@ -30,11 +30,11 @@ if ((ctx("profile") ?? "economy") === "economy") {
     githubOidcProviderArn: ctx("githubOidcProviderArn"),
     llmProvider: ctx("llmProvider") === "anthropic" ? "anthropic" : "none",
     secrets: {
-      mongoUrl: "/mainstreet/MONGO_URL",
-      ...(ctx("twilio") === "true" ? { twilioAuthToken: "/mainstreet/TWILIO_AUTH_TOKEN" } : {}),
-      ...(ctx("llmProvider") === "anthropic" ? { anthropicApiKey: "/mainstreet/ANTHROPIC_API_KEY" } : {}),
-      ...(ctx("underwriters") === "true" ? { underwriters: "/mainstreet/UNDERWRITERS" } : {}),
+      mongoUrl: "/vendorstreet/MONGO_URL",
+      ...(ctx("twilio") === "true" ? { twilioAuthToken: "/vendorstreet/TWILIO_AUTH_TOKEN" } : {}),
+      ...(ctx("llmProvider") === "anthropic" ? { anthropicApiKey: "/vendorstreet/ANTHROPIC_API_KEY" } : {}),
+      ...(ctx("underwriters") === "true" ? { underwriters: "/vendorstreet/UNDERWRITERS" } : {}),
     },
-    tags: { project: "mainstreet" },
+    tags: { project: "vendorstreet" },
   });
 }

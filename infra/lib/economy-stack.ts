@@ -9,7 +9,7 @@
 //
 // Trade-offs, on purpose: one instance (a deploy restarts the container: a few seconds of downtime),
 // and CloudFront→instance is HTTP inside AWS's network, guarded by a security group that only admits
-// CloudFront plus a secret header. The "full" profile (mainstreet-stack.ts) has TLS to a load balancer,
+// CloudFront plus a secret header. The "full" profile (vendorstreet-stack.ts) has TLS to a load balancer,
 // Fargate with rolling deploys and no single machine to patch.
 import * as cdk from "aws-cdk-lib";
 import * as acm from "aws-cdk-lib/aws-certificatemanager";
@@ -36,11 +36,11 @@ export interface EconomyProps extends cdk.StackProps {
   /** t3.micro (1 GB) is enough for a demo; t3.small if you see memory pressure. */
   instanceType?: string;
   cloudfrontPrefixListId?: string;
-  /** Non-secret settings passed to the container. Secrets come from SSM under /mainstreet/. */
+  /** Non-secret settings passed to the container. Secrets come from SSM under /vendorstreet/. */
   environment?: Record<string, string>;
 }
 
-export const SSM_PREFIX = "/mainstreet/";
+export const SSM_PREFIX = "/vendorstreet/";
 
 export class EconomyStack extends cdk.Stack {
   override get availabilityZones(): string[] {
@@ -65,15 +65,15 @@ export class EconomyStack extends cdk.Stack {
 
     // ── image registry, logs, email
     const repo = new ecr.Repository(this, "Repo", {
-      repositoryName: "mainstreet",
+      repositoryName: "vendorstreet",
       lifecycleRules: [{ maxImageCount: 10, description: "keep the last 10 builds for rollback" }],
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       emptyOnDelete: true,
     });
-    const logGroup = new logs.LogGroup(this, "Logs", { logGroupName: "/mainstreet/web", retention: logs.RetentionDays.TWO_WEEKS, removalPolicy: cdk.RemovalPolicy.DESTROY });
+    const logGroup = new logs.LogGroup(this, "Logs", { logGroupName: "/vendorstreet/web", retention: logs.RetentionDays.TWO_WEEKS, removalPolicy: cdk.RemovalPolicy.DESTROY });
     const mailIdentity = new ses.EmailIdentity(this, "MailIdentity", { identity: ses.Identity.publicHostedZone(zone) });
 
-    // ── the machine's permissions: pull the image, read /mainstreet/* settings, write logs, send email.
+    // ── the machine's permissions: pull the image, read /vendorstreet/* settings, write logs, send email.
     // Session Manager replaces SSH, so no key pair and no port 22.
     const role = new iam.Role(this, "InstanceRole", {
       assumedBy: new iam.ServicePrincipal("ec2.amazonaws.com"),
@@ -102,7 +102,7 @@ export class EconomyStack extends cdk.Stack {
       PUBLIC_URL: `https://${domainName}`,
       TRUST_PROXY_HOPS: "1", // CloudFront
       MAIL_TRANSPORT: "ses",
-      MAIL_FROM: `Mainstreet <no-reply@${domainName}>`,
+      MAIL_FROM: `Vendor Street <no-reply@${domainName}>`,
       AWS_REGION: this.region,
       LLM_PROVIDER: "anthropic",
       ANTHROPIC_MODEL: "claude-haiku-4-5-20251001",
@@ -121,7 +121,7 @@ export class EconomyStack extends cdk.Stack {
     const runScript = `#!/bin/bash
 # Pulls an image and (re)starts the app. Usage: run.sh <image-tag>   (no tag: restart the last one)
 set -euo pipefail
-cd /opt/mainstreet
+cd /opt/vendorstreet
 TAG="\${1:-$(cat current-tag 2>/dev/null || echo latest)}"
 IMAGE="${repo.repositoryUri}:$TAG"
 # Secrets and settings: every parameter under ${SSM_PREFIX} becomes an environment variable
@@ -131,8 +131,8 @@ aws ssm get-parameters-by-path --region ${this.region} --path ${SSM_PREFIX} --wi
 chmod 600 secrets.env
 aws ecr get-login-password --region ${this.region} | docker login --username AWS --password-stdin ${this.account}.dkr.ecr.${this.region}.amazonaws.com >/dev/null
 docker pull "$IMAGE"
-docker rm -f mainstreet >/dev/null 2>&1 || true
-docker run -d --name mainstreet --restart unless-stopped -p 80:3000 \\
+docker rm -f vendorstreet >/dev/null 2>&1 || true
+docker run -d --name vendorstreet --restart unless-stopped -p 80:3000 \\
   --env-file app.env --env-file secrets.env \\
   --log-driver awslogs --log-opt awslogs-region=${this.region} --log-opt awslogs-group=${logGroup.logGroupName} --log-opt awslogs-stream=web \\
   "$IMAGE"
@@ -140,7 +140,7 @@ for i in $(seq 1 30); do
   if curl -fsS localhost/health >/dev/null; then echo "$TAG" > current-tag; echo "running $IMAGE"; exit 0; fi
   sleep 2
 done
-echo "app did not become healthy"; docker logs --tail 80 mainstreet; exit 1
+echo "app did not become healthy"; docker logs --tail 80 vendorstreet; exit 1
 `;
 
     const userData = ec2.UserData.forLinux();
@@ -150,12 +150,12 @@ echo "app did not become healthy"; docker logs --tail 80 mainstreet; exit 1
       "if [ ! -f /swapfile ]; then dd if=/dev/zero of=/swapfile bs=1M count=1024 && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile && echo '/swapfile swap swap defaults 0 0' >> /etc/fstab; fi",
       "dnf install -y docker",
       "systemctl enable --now docker",
-      "mkdir -p /opt/mainstreet",
-      `cat > /opt/mainstreet/app.env <<'ENV'\n${envFile}\nENV`,
-      `cat > /opt/mainstreet/run.sh <<'RUN'\n${runScript}RUN`,
-      "chmod +x /opt/mainstreet/run.sh",
+      "mkdir -p /opt/vendorstreet",
+      `cat > /opt/vendorstreet/app.env <<'ENV'\n${envFile}\nENV`,
+      `cat > /opt/vendorstreet/run.sh <<'RUN'\n${runScript}RUN`,
+      "chmod +x /opt/vendorstreet/run.sh",
       // First boot: start whatever is in the registry; before the first push there is nothing yet, and that's fine
-      "/opt/mainstreet/run.sh || echo 'no image yet: push to main to deploy'",
+      "/opt/vendorstreet/run.sh || echo 'no image yet: push to main to deploy'",
     );
 
     const instance = new ec2.Instance(this, "Web", {
@@ -173,7 +173,7 @@ echo "app did not become healthy"; docker logs --tail 80 mainstreet; exit 1
     // instance role's credentials (for SES). The default of 1 stops at the container's network bridge.
     const metadata = new ec2.LaunchTemplate(this, "Metadata", { requireImdsv2: true, httpPutResponseHopLimit: 2, httpTokens: ec2.LaunchTemplateHttpTokens.REQUIRED });
     (instance.node.defaultChild as ec2.CfnInstance).launchTemplate = { launchTemplateId: metadata.launchTemplateId!, version: metadata.latestVersionNumber };
-    const eip = new ec2.CfnEIP(this, "Ip", { instanceId: instance.instanceId, tags: [{ key: "Name", value: "mainstreet" }] });
+    const eip = new ec2.CfnEIP(this, "Ip", { instanceId: instance.instanceId, tags: [{ key: "Name", value: "vendorstreet" }] });
     const originHost = `origin.${domainName}`;
     new route53.ARecord(this, "OriginRecord", { zone, recordName: originHost, target: route53.RecordTarget.fromIpAddresses(eip.ref), ttl: cdk.Duration.minutes(5) });
 
@@ -193,7 +193,7 @@ echo "app did not become healthy"; docker logs --tail 80 mainstreet; exit 1
       keepaliveTimeout: cdk.Duration.seconds(5),
     });
     const distribution = new cloudfront.Distribution(this, "Cdn", {
-      comment: "mainstreet",
+      comment: "vendorstreet",
       domainNames: [domainName, `*.${domainName}`],
       certificate,
       priceClass: cloudfront.PriceClass.PRICE_CLASS_100, // North America + Europe edges: cheapest

@@ -14,8 +14,8 @@ import * as targets from "aws-cdk-lib/aws-route53-targets";
 import * as ssm from "aws-cdk-lib/aws-ssm";
 import type { Construct } from "constructs";
 
-export interface MainstreetProps extends cdk.StackProps {
-  domainName: string; // e.g. mainstreet-prateek.com
+export interface VendorStreetProps extends cdk.StackProps {
+  domainName: string; // e.g. vendorstreet-prateek.com
   hostedZoneId: string; // the Route 53 zone created when the domain was registered
   githubRepo?: string; // "owner/repo": creates a role GitHub Actions can assume to deploy
   githubOidcProviderArn?: string; // reuse an existing GitHub OIDC provider in this account
@@ -26,16 +26,16 @@ export interface MainstreetProps extends cdk.StackProps {
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
-export class MainstreetStack extends cdk.Stack {
+export class VendorStreetStack extends cdk.Stack {
   /** Pinned so no construct triggers an AWS lookup at synth time (works offline, in tests, in CI). */
   override get availabilityZones(): string[] {
     return [`${this.region}a`, `${this.region}b`];
   }
 
-  constructor(scope: Construct, id: string, props: MainstreetProps) {
+  constructor(scope: Construct, id: string, props: VendorStreetProps) {
     super(scope, id, props);
     const { domainName } = props;
-    const secretNames = props.secrets ?? { mongoUrl: "/mainstreet/MONGO_URL" };
+    const secretNames = props.secrets ?? { mongoUrl: "/vendorstreet/MONGO_URL" };
 
     // No lookups, so `cdk synth` works offline and in tests.
     const zone = route53.HostedZone.fromHostedZoneAttributes(this, "Zone", { hostedZoneId: props.hostedZoneId, zoneName: domainName });
@@ -94,7 +94,7 @@ export class MainstreetStack extends cdk.Stack {
           PUBLIC_URL: `https://${domainName}`,
           LLM_PROVIDER: props.llmProvider ?? "none",
           MAIL_TRANSPORT: "ses",
-          MAIL_FROM: `Mainstreet <no-reply@${domainName}>`,
+          MAIL_FROM: `Vendor Street <no-reply@${domainName}>`,
         },
         secrets,
         logDriver: ecs.LogDrivers.awsLogs({
