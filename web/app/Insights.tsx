@@ -42,14 +42,14 @@ export function Insights() {
   return (
     <>
       <h2>Insights</h2>
-      <div className="kpis">
+      <div className="kpis" data-tour="kpis">
         <div className="kpi"><div className="v">{dollars(s.revenue.paidCents)}</div><div className="l">Paid to you, all time</div></div>
         <div className="kpi"><div className="v">{s.revenue.averageJobCents === null ? "n/a" : dollars(s.revenue.averageJobCents)}</div><div className="l">Average job</div></div>
         <div className="kpi"><div className="v">{s.revenue.averageDaysToPay === null ? "n/a" : `${s.revenue.averageDaysToPay} days`}</div><div className="l">Invoice to payment</div></div>
         <div className="kpi"><div className="v">{dollars(s.revenue.outstandingCents)}</div><div className="l">{s.revenue.outstandingInvoices} unpaid invoice{s.revenue.outstandingInvoices === 1 ? "" : "s"}</div></div>
       </div>
 
-      <section className="panel" aria-label="Pipeline">
+      <section className="panel" aria-label="Pipeline" data-tour="funnel">
         <h3>From lead to paid</h3>
         <div className="funnel">
           {steps.map((st) => (
@@ -91,7 +91,7 @@ export function Insights() {
       {viewing && <EmailPreview id={viewing} onClose={() => setViewing(null)} />}
       <NotificationEmail />
 
-      <section className="panel" aria-label="Emails sent">
+      <section className="panel" aria-label="Emails sent" data-tour="emails">
         <h3>Emails</h3>
         {messages.length === 0 ? (
           <p className="empty">Nothing sent yet. Emails go out when a request comes in, and when you send an estimate, issue an invoice or record a payment.</p>

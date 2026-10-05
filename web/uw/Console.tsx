@@ -9,6 +9,7 @@ import { ApplicantCard } from "../ui/ApplicantCard";
 import { MemoPanel } from "../ui/MemoPanel";
 import { RiskBreakdown } from "../ui/RiskBreakdown";
 import { useHash } from "../app/useHash";
+import { Guide } from "../tour/Tour";
 
 type Row = {
   id: string;
@@ -58,6 +59,7 @@ export function Console() {
           </aside>
         )}
         <Queue selected={parts[1]} go={go} />
+        <Guide page="underwriting" auto={demoOnly} />
       </main>
     </div>
   );
@@ -127,8 +129,8 @@ function Queue({ selected, go }: { selected?: string; go: (p: string) => void })
     <>
       <h2>Review queue</h2>
       <div className="split">
-        <div className="stack">
-          {q.pending.length ? table(q.pending, true) : <p className="empty">Nothing waiting. Every application so far was clear enough to decide automatically.</p>}
+        <div className="stack" data-tour="queue">
+          {q.pending.length ? <div data-tour="queue-pending">{table(q.pending, true)}</div> : <p className="empty">Nothing waiting. Every application so far was clear enough to decide automatically.</p>}
           {q.recent.length > 0 && (<><h3>Recently decided</h3>{table(q.recent, false)}</>)}
         </div>
         {selected ? <Case key={selected} id={selected} onDecided={reload} /> : <p className="empty">Choose an application. The oldest is at the top.</p>}
@@ -165,14 +167,14 @@ function Case({ id, onDecided }: { id: string; onDecided: () => void }) {
           {a.decision.note ? `: "${a.decision.note}"` : ""}
         </p>
       )}
-      {a.assessment && <RiskBreakdown a={a.assessment} />}
+      {a.assessment && <div data-tour="risk"><RiskBreakdown a={a.assessment} /></div>}
       {pr && (
         <div className="small" style={{ borderLeft: "3px solid var(--rule-strong)", paddingLeft: "0.75rem" }} data-testid="platform-revenue">
           <strong>Paid through Mainstreet</strong> during the statement period: {money(pr.paidCents)} from {pr.paidInvoices} invoice{pr.paidInvoices === 1 ? "" : "s"},
           {" "}{pr.shareOfBankRevenue === null ? "" : `${pct(pr.shareOfBankRevenue, 1)} of the ${dollars(pr.bankRevenueCents)} in sales the bank shows`}. Context only; not part of the score.
         </div>
       )}
-      <div className="stack">
+      <div className="stack" data-tour="memo">
         <div className="row" style={{ justifyContent: "space-between" }}>
           <h3>AI memo</h3>
           <button className="secondary" disabled={!!busy || !a.assessment} onClick={writeMemo}>{busy === "memo" ? "Writing…" : memo ? "Rewrite memo" : "Write memo"}</button>
@@ -240,7 +242,7 @@ function DecisionForm({ d, onDone }: { d: Detail; onDone: () => void }) {
     }
   }
   return (
-    <form className="uw-form" onSubmit={submit} aria-label="Decision">
+    <form className="uw-form" onSubmit={submit} aria-label="Decision" data-tour="decision">
       <h3>Your decision</h3>
       <div className="row" role="radiogroup" aria-label="Outcome">
         <label className="row" style={{ gap: "0.4rem", fontWeight: 500 }}><input type="radio" name="o" style={{ width: "auto" }} checked={outcome === "approve"} onChange={() => setOutcome("approve")} />Approve</label>

@@ -6,6 +6,8 @@ import { Leads } from "./Leads";
 import { Estimates } from "./Estimates";
 import { Funding } from "./Funding";
 import { Insights } from "./Insights";
+import { Guide } from "../tour/Tour";
+import type { PageId } from "../tour/steps";
 
 const SECTIONS = [
   { id: "leads", name: "Leads" },
@@ -17,6 +19,7 @@ const SECTIONS = [
 export function Dashboard() {
   const [site, setSite] = useState<{ name: string } | null>(null);
   const [signedIn, setSignedIn] = useState(!!session.get());
+  const [demo, setDemo] = useState<boolean | undefined>(undefined); // known once settings load
   const [parts, go] = useHash();
   const section = SECTIONS.some((s) => s.id === parts[0]) ? parts[0]! : "leads";
 
@@ -51,11 +54,12 @@ export function Dashboard() {
         </button>
       </aside>
       <main>
-        <DemoBanner />
+        <DemoBanner onDemo={setDemo} />
         {section === "leads" && <Leads go={go} />}
         {section === "estimates" && <Estimates selected={parts[1]} go={go} />}
         {section === "funding" && <Funding selected={parts[1]} go={go} />}
         {section === "insights" && <Insights />}
+        {demo !== undefined && <Guide key={section} page={section as PageId} auto={demo} />}
       </main>
     </div>
   );
@@ -96,21 +100,21 @@ function SignIn({ name, onDone }: { name?: string; onDone: () => void }) {
 }
 
 /** Demo businesses say so on every screen, and point the visitor at the other side of the product. */
-function DemoBanner() {
+function DemoBanner({ onDemo }: { onDemo: (isDemo: boolean) => void }) {
   const [demo, setDemo] = useState<{ expiresAt: string } | null>(null);
   const [uwKey, setUwKey] = useState<string | null>(null);
   useEffect(() => {
-    api<{ settings: { demo: { expiresAt: string } | null } }>("/settings").then((r) => setDemo(r.settings.demo), () => {});
+    api<{ settings: { demo: { expiresAt: string } | null } }>("/settings").then((r) => { setDemo(r.settings.demo); onDemo(!!r.settings.demo); }, () => onDemo(false));
     api<{ platform: { demo: { underwriterKey: string | null } | null } }>("/platform").then((r) => setUwKey(r.platform.demo?.underwriterKey ?? null), () => {});
   }, []);
   if (!demo) return null;
   return (
-    <aside className="demo-banner" aria-label="Demo business">
+    <aside className="demo-banner" aria-label="Demo business" data-tour="demo-banner">
       <p>
         <strong>Demo business.</strong> Everyone and everything here is made up. Emails are kept under Insights, never sent. Expires {day(demo.expiresAt)}.
       </p>
       {uwKey && (
-        <a className="button secondary small" href={`/underwriting#key=${uwKey}`} target="_blank" rel="noopener">
+        <a className="button secondary small" href={`/underwriting#key=${uwKey}`} target="_blank" rel="noopener" data-tour="uw-link">
           Open the underwriter console
         </a>
       )}

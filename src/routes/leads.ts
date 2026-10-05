@@ -28,7 +28,7 @@ export function leadsRouter(deps: Deps, notifier: Notifier) {
   // Public: what a tenant's website needs to render itself.
   r.get("/site", (_req, res) => {
     const t = getTenant(res);
-    res.json({ site: { name: t.name, subdomain: t.subdomain } });
+    res.json({ site: { name: t.name, subdomain: t.subdomain, demo: !!t.demo } });
   });
 
   r.post("/leads", leadLimit, async (req, res) => {

@@ -30,7 +30,7 @@ export function Estimates({ selected, go }: { selected?: string; go: (path: stri
       {list && list.length === 0 && <p className="empty">No estimates yet. Draft one from a lead.</p>}
       {list && list.length > 0 && (
         <div className="split">
-          <table>
+          <table data-tour="estimates-table">
             <thead>
               <tr>
                 <th>Created</th>
@@ -106,7 +106,7 @@ function EstimateDetail({ id, onChange }: { id: string; onChange: () => void }) 
   const dirty = JSON.stringify(items) !== JSON.stringify(e.lineItems);
 
   return (
-    <section className="panel" aria-label="Estimate">
+    <section className="panel" aria-label="Estimate" data-tour="estimate-panel">
       <div className="row" style={{ justifyContent: "space-between" }}>
         <h3>Estimate from {day(e.createdAt)}</h3>
         <Status value={e.status} />
@@ -180,7 +180,7 @@ function EstimateDetail({ id, onChange }: { id: string; onChange: () => void }) 
       {e.notes && !e.aiDraft && <p className="quiet small" style={{ whiteSpace: "pre-line" }}>{e.notes}</p>}
 
       <ErrorText error={error} />
-      <div className="row">
+      <div className="row" data-tour="estimate-actions">
         {editable && dirty && <button disabled={busy} onClick={save}>Save changes</button>}
         {!dirty &&
           (ACTIONS[e.status] ?? []).map((a) => (
@@ -190,7 +190,7 @@ function EstimateDetail({ id, onChange }: { id: string; onChange: () => void }) 
       </div>
 
       {invoice && (
-        <div className="stack" style={{ borderTop: "1px solid var(--rule)", paddingTop: "1rem" }}>
+        <div className="stack" style={{ borderTop: "1px solid var(--rule)", paddingTop: "1rem" }} data-tour="invoice">
           <div className="row" style={{ justifyContent: "space-between" }}>
             <h3>Invoice {invoice.number}</h3>
             <Status value={invoice.status} />

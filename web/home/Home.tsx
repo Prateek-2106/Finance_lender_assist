@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { ErrorText } from "../ui/bits";
+import { Guide } from "../tour/Tour";
 
 export type Platform = {
   baseDomain: string;
@@ -51,7 +52,7 @@ export function Home({ platform }: { platform: Platform }) {
 
   return (
     <div className="home">
-      <header className="hero">
+      <header className="hero" data-tour="hero">
         <p className="eyebrow">Mainstreet</p>
         <h1>A website, quotes, invoices and funding for a small business, in one place.</h1>
         <p className="lede">
@@ -60,7 +61,7 @@ export function Home({ platform }: { platform: Platform }) {
         </p>
         {platform.demo ? (
           <div className="cta">
-            <button onClick={start} disabled={busy} className="big-button">
+            <button onClick={start} disabled={busy} className="big-button" data-tour="try">
               {busy ? "Setting up your business…" : "Try it with a demo business"}
             </button>
             <p className="quiet small">
@@ -90,7 +91,7 @@ export function Home({ platform }: { platform: Platform }) {
         )}
       </section>
 
-      <section aria-labelledby="flow">
+      <section aria-labelledby="flow" data-tour="diagrams">
         <h2 id="flow">How it fits together</h2>
         <figure>
           <a href="/workflow.webp"><img src="/workflow.webp" alt="Workflow: a customer request becomes a lead, an AI-drafted estimate a person approves, an invoice and a receipt; bank statements become a risk assessment, an offer or a decline, and an underwriter decision." loading="lazy" /></a>
@@ -116,6 +117,7 @@ export function Home({ platform }: { platform: Platform }) {
         </table>
       </section>
 
+      <Guide page="home" auto={!!platform.demo} />
       <footer className="small quiet">
         All businesses, customers and bank statements here are synthetic. Funding decisions are a demonstration, not an offer of credit.
         {platform.author && <> Built by {platform.author}.</>}

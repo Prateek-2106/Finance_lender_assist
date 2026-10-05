@@ -1,17 +1,18 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { ErrorText } from "../ui/bits";
+import { Guide } from "../tour/Tour";
 
 /** The tenant's public website: who they are, and a way to ask for a quote. */
 export function Site() {
-  const [site, setSite] = useState<{ name: string } | null>(null);
+  const [site, setSite] = useState<{ name: string; demo?: boolean } | null>(null);
   const [missing, setMissing] = useState(false);
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
   useEffect(() => {
-    api<{ site: { name: string } }>("/site")
+    api<{ site: { name: string; demo?: boolean } }>("/site")
       .then((r) => {
         setSite(r.site);
         document.title = r.site.name;
@@ -54,7 +55,7 @@ export function Site() {
           <strong>Thanks, we got your request.</strong> {site.name} will be in touch shortly.
         </p>
       ) : (
-        <form className="stack" onSubmit={submit}>
+        <form className="stack" onSubmit={submit} data-tour="site-form">
           <label>
             Your name
             <input name="name" required autoComplete="name" />
@@ -75,10 +76,11 @@ export function Site() {
           </label>
           <ErrorText error={error} />
           <div>
-            <button disabled={busy}>{busy ? "Sending…" : "Request a quote"}</button>
+            <button disabled={busy} data-tour="site-submit">{busy ? "Sending…" : "Request a quote"}</button>
           </div>
         </form>
       )}
+      <Guide page="site" auto={!!site.demo} />
     </div>
   );
 }

@@ -21,14 +21,14 @@ export function Funding({ selected, go }: { selected?: string; go: (path: string
     <>
       <div className="row" style={{ justifyContent: "space-between" }}>
         <h2>Funding</h2>
-        {!creating && <button onClick={() => go("funding/new")}>New application</button>}
+        {!creating && <button onClick={() => go("funding/new")} data-tour="new-application">New application</button>}
       </div>
       <ErrorText error={error} />
       <div className="split">
         <div>
           {list && list.length === 0 && <p className="empty">No applications yet. Start one to see what your business could get.</p>}
           {list && list.length > 0 && (
-            <table>
+            <table data-tour="funding-table">
               <thead><tr><th>Started</th><th className="num">Asked for</th><th>Status</th></tr></thead>
               <tbody>
                 {list.map((a) => (
@@ -168,7 +168,7 @@ function ApplicationDetail({ id, onChange }: { id: string; onChange: () => void 
       )}
 
       {app.assessment && (
-        <details>
+        <details data-tour="how-decided">
           <summary>How we decided</summary>
           <div style={{ marginTop: "0.75rem" }}>
             <RiskBreakdown a={app.assessment} showEngineDecision={false} />

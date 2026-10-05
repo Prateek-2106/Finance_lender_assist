@@ -41,7 +41,7 @@ export function Leads({ go }: { go: (path: string) => void }) {
         <p className="empty">No leads yet. Share your website link, or text your business number, and new requests show up here.</p>
       )}
       {leads && leads.length > 0 && (
-        <table>
+        <table data-tour="leads-table">
           <thead>
             <tr>
               <th>From</th>
@@ -66,11 +66,11 @@ export function Leads({ go }: { go: (path: string) => void }) {
                 <td className="quiet small">{day(l.createdAt)}</td>
                 <td className="num">
                   {latest.has(l.id) ? (
-                    <a href={`#/estimates/${latest.get(l.id)!.id}`} className="small" aria-label={`Open estimate for ${l.name}`}>
+                    <a href={`#/estimates/${latest.get(l.id)!.id}`} className="small" data-tour="lead-status" aria-label={`Open estimate for ${l.name}`}>
                       <Status value={latest.get(l.id)!.status} />
                     </a>
                   ) : (
-                    <button className="secondary" disabled={drafting === l.id} onClick={() => draft(l)}>
+                    <button className="secondary" disabled={drafting === l.id} onClick={() => draft(l)} data-tour="draft">
                       {drafting === l.id ? "Drafting…" : "Draft estimate"}
                     </button>
                   )}

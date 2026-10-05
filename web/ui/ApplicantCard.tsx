@@ -4,7 +4,7 @@ import { day, dollars, money } from "../api";
 /** The answer, in words the person who asked for money would use. */
 export function ApplicantCard({ v }: { v: ApplicantView }) {
   return (
-    <div className={`applicant ${v.status}`} data-testid="applicant-card">
+    <div className={`applicant ${v.status}`} data-testid="applicant-card" data-tour="applicant-card">
       <h3 className="headline">{v.headline}</h3>
       <p>{v.summary}</p>
       {v.offer && (
