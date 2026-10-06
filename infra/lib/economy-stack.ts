@@ -24,6 +24,7 @@ import * as targets from "aws-cdk-lib/aws-route53-targets";
 import * as ses from "aws-cdk-lib/aws-ses";
 import * as ssm from "aws-cdk-lib/aws-ssm";
 import type { Construct } from "constructs";
+import { githubSubjects } from "./github.js";
 
 /** AWS-managed list of CloudFront's origin-facing addresses (`com.amazonaws.global.cloudfront.origin-facing`), per region. */
 export const CLOUDFRONT_PREFIX_LISTS: Record<string, string> = { "us-east-1": "pl-3b927c52" };
@@ -32,6 +33,8 @@ export interface EconomyProps extends cdk.StackProps {
   domainName: string;
   hostedZoneId: string;
   githubRepo?: string;
+  /** "ownerId/repoId": accept GitHub's newer ID-based token subject too (see github.ts). */
+  githubRepoIds?: string;
   githubOidcProviderArn?: string;
   /** t3.micro (1 GB) is enough for a demo; t3.small if you see memory pressure. */
   instanceType?: string;
@@ -237,7 +240,7 @@ echo "app did not become healthy"; docker logs --tail 80 vendorstreet; exit 1
       const deployRole = new iam.Role(this, "GitHubDeployRole", {
         assumedBy: new iam.WebIdentityPrincipal(provider.openIdConnectProviderArn, {
           StringEquals: { "token.actions.githubusercontent.com:aud": "sts.amazonaws.com" },
-          StringLike: { "token.actions.githubusercontent.com:sub": `repo:${props.githubRepo}:ref:refs/heads/main` },
+          StringLike: { "token.actions.githubusercontent.com:sub": githubSubjects(props.githubRepo, props.githubRepoIds) },
         }),
         description: "GitHub Actions on main: push the image and restart the app",
         maxSessionDuration: cdk.Duration.hours(1),

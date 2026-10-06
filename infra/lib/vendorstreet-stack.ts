@@ -13,11 +13,13 @@ import * as ses from "aws-cdk-lib/aws-ses";
 import * as targets from "aws-cdk-lib/aws-route53-targets";
 import * as ssm from "aws-cdk-lib/aws-ssm";
 import type { Construct } from "constructs";
+import { githubSubjects } from "./github.js";
 
 export interface VendorStreetProps extends cdk.StackProps {
   domainName: string; // e.g. vendorstreet-prateek.com
   hostedZoneId: string; // the Route 53 zone created when the domain was registered
   githubRepo?: string; // "owner/repo": creates a role GitHub Actions can assume to deploy
+  githubRepoIds?: string; // "ownerId/repoId": also accept GitHub's ID-based token subject (see github.ts)
   githubOidcProviderArn?: string; // reuse an existing GitHub OIDC provider in this account
   llmProvider?: "none" | "anthropic";
   /** SSM SecureString parameters, created once with `aws ssm put-parameter` (see README). */
@@ -129,7 +131,7 @@ export class VendorStreetStack extends cdk.Stack {
       const role = new iam.Role(this, "GitHubDeployRole", {
         assumedBy: new iam.WebIdentityPrincipal(provider.openIdConnectProviderArn, {
           StringEquals: { "token.actions.githubusercontent.com:aud": "sts.amazonaws.com" },
-          StringLike: { "token.actions.githubusercontent.com:sub": `repo:${props.githubRepo}:ref:refs/heads/main` },
+          StringLike: { "token.actions.githubusercontent.com:sub": githubSubjects(props.githubRepo, props.githubRepoIds) },
         }),
         description: "Assumed by GitHub Actions on main to run cdk deploy",
         maxSessionDuration: cdk.Duration.hours(1),

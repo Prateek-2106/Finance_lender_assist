@@ -100,7 +100,7 @@ describe("GitHub deploy role", () => {
             Action: "sts:AssumeRoleWithWebIdentity",
             Condition: {
               StringEquals: { "token.actions.githubusercontent.com:aud": "sts.amazonaws.com" },
-              StringLike: { "token.actions.githubusercontent.com:sub": "repo:Prateek-2106/mainstreet:ref:refs/heads/main" },
+              StringLike: { "token.actions.githubusercontent.com:sub": ["repo:Prateek-2106/mainstreet:ref:refs/heads/main"] },
             },
           }),
         ],

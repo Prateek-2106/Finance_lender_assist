@@ -17,6 +17,7 @@ if ((ctx("profile") ?? "economy") === "economy") {
     domainName,
     hostedZoneId,
     githubRepo: ctx("githubRepo"),
+    githubRepoIds: ctx("githubRepoIds"),
     githubOidcProviderArn: ctx("githubOidcProviderArn"),
     instanceType: ctx("instanceType"),
     tags: { project: "vendorstreet" },
@@ -27,6 +28,7 @@ if ((ctx("profile") ?? "economy") === "economy") {
     domainName,
     hostedZoneId,
     githubRepo: ctx("githubRepo"),
+    githubRepoIds: ctx("githubRepoIds"),
     githubOidcProviderArn: ctx("githubOidcProviderArn"),
     llmProvider: ctx("llmProvider") === "anthropic" ? "anthropic" : "none",
     secrets: {

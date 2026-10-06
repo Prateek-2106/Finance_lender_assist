@@ -85,7 +85,7 @@ describe("economy profile", () => {
 
   it("GitHub on main may push the image and run the deploy command on this one machine, nothing else", () => {
     t.hasResourceProperties("AWS::IAM::Role", {
-      AssumeRolePolicyDocument: { Statement: [Match.objectLike({ Condition: Match.objectLike({ StringLike: { "token.actions.githubusercontent.com:sub": "repo:Prateek-2106/mainstreet:ref:refs/heads/main" } }) })] },
+      AssumeRolePolicyDocument: { Statement: [Match.objectLike({ Condition: Match.objectLike({ StringLike: { "token.actions.githubusercontent.com:sub": ["repo:Prateek-2106/mainstreet:ref:refs/heads/main"] } }) })] },
     });
     const policies = JSON.stringify(t.findResources("AWS::IAM::Policy"));
     expect(policies).toContain("ssm:SendCommand");
@@ -95,5 +95,36 @@ describe("economy profile", () => {
 
   it("refuses regions other than us-east-1 (CloudFront certificates live there)", () => {
     expect(() => new EconomyStack(new cdk.App(), "X", { env: { account: "123456789012", region: "eu-west-1" }, domainName: "x.com", hostedZoneId: "Z1" })).toThrow(/us-east-1/);
+  });
+});
+
+describe("GitHub deploy trust", () => {
+  it("accepts GitHub's ID-based subject for exactly this repository when the IDs are given", () => {
+    const stack = new EconomyStack(new cdk.App(), "Ids", {
+      env: { account: "123456789012", region: "us-east-1" },
+      domainName: "example-mainstreet.com",
+      hostedZoneId: "Z0000000EXAMPLE",
+      githubRepo: "Prateek-2106/vendorstreet",
+      githubRepoIds: "65821259/1400722849",
+    });
+    Template.fromStack(stack).hasResourceProperties("AWS::IAM::Role", {
+      AssumeRolePolicyDocument: {
+        Statement: [Match.objectLike({
+          Condition: Match.objectLike({
+            StringLike: {
+              "token.actions.githubusercontent.com:sub": [
+                "repo:Prateek-2106/vendorstreet:ref:refs/heads/main",
+                "repo:Prateek-2106@65821259/vendorstreet@1400722849:ref:refs/heads/main",
+              ],
+            },
+          }),
+        })],
+      },
+    });
+  });
+
+  it("rejects malformed IDs instead of trusting something broader", async () => {
+    const { githubSubjects } = await import("../lib/github.js");
+    expect(() => githubSubjects("Prateek-2106/vendorstreet", "abc/*")).toThrow(/githubRepoIds/);
   });
 });
