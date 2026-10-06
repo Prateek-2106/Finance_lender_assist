@@ -1,17 +1,17 @@
 {
-  "app": "npx tsx bin/vendorstreet.ts",
-  "watch": {
-    "include": [
-      "bin",
-      "lib"
-    ]
-  },
-  "context": {
-    "domainName": "vendorstreet.dev",
-    "hostedZoneId": "Z01663363BAT5VFVRAK16",
-    "githubRepo": "Prateek-2106/vendorstreet",
-    "@aws-cdk/aws-ecs:disableEcsImdsBlocking": true,
-    "@aws-cdk/aws-ecs:enableImdsBlockingDeprecatedFeature": false
-  }
+    "app":  "npx tsx bin/vendorstreet.ts",
+    "watch":  {
+                  "include":  [
+                                  "bin",
+                                  "lib"
+                              ]
+              },
+    "context":  {
+                    "domainName":  "vendorstreet.dev",
+                    "hostedZoneId":  "Z01663363BAT5VFVRAK16",
+                    "githubRepo":  "Prateek-2106/vendorstreet",
+                    "@aws-cdk/aws-ecs:disableEcsImdsBlocking":  true,
+                    "@aws-cdk/aws-ecs:enableImdsBlockingDeprecatedFeature":  false,
+                    "githubRepoIds":  "65821259/1400722849"
+                }
 }
-
