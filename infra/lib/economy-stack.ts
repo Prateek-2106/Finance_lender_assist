@@ -74,7 +74,7 @@ export class EconomyStack extends cdk.Stack {
       emptyOnDelete: true,
     });
     const logGroup = new logs.LogGroup(this, "Logs", { logGroupName: "/vendorstreet/web", retention: logs.RetentionDays.TWO_WEEKS, removalPolicy: cdk.RemovalPolicy.DESTROY });
-    const mailIdentity = new ses.EmailIdentity(this, "MailIdentity", { identity: ses.Identity.publicHostedZone(zone) });
+    new ses.EmailIdentity(this, "MailIdentity", { identity: ses.Identity.publicHostedZone(zone) });
 
     // ── the machine's permissions: pull the image, read /vendorstreet/* settings, write logs, send email.
     // Session Manager replaces SSH, so no key pair and no port 22.
@@ -94,7 +94,10 @@ export class EconomyStack extends cdk.Stack {
       new iam.PolicyStatement({ actions: ["kms:Decrypt"], resources: ["*"], conditions: { StringEquals: { "kms:ViaService": `ssm.${this.region}.amazonaws.com` } } }),
     );
     role.addToPolicy(
-      new iam.PolicyStatement({ actions: ["ses:SendEmail", "ses:SendRawEmail"], resources: [`arn:aws:ses:${this.region}:${this.account}:identity/${mailIdentity.emailIdentityName}`] }),
+      // Any identity verified in this account. In the SES sandbox AWS checks the *recipient's* identity too
+      // (every recipient must be verified), so naming only the domain fails with "not authorized ...
+      // identity/someone@gmail.com". The account only verifies the domain and test inboxes, so this stays narrow.
+      new iam.PolicyStatement({ actions: ["ses:SendEmail", "ses:SendRawEmail"], resources: [`arn:aws:ses:${this.region}:${this.account}:identity/*`] }),
     );
 
     // ── settings for the container (non-secret). Secrets are read on the machine at start-up.

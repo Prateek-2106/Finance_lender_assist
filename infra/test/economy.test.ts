@@ -78,7 +78,7 @@ describe("economy profile", () => {
       PolicyDocument: { Statement: Match.arrayWith([Match.objectLike({ Action: ["ssm:GetParametersByPath", "ssm:GetParameter"], Resource: Match.arrayWith([Match.stringLikeRegexp(":parameter/vendorstreet/\\*")]) })]) },
     });
     t.hasResourceProperties("AWS::IAM::Policy", {
-      PolicyDocument: { Statement: Match.arrayWith([Match.objectLike({ Action: ["ses:SendEmail", "ses:SendRawEmail"] })]) },
+      PolicyDocument: { Statement: Match.arrayWith([Match.objectLike({ Action: ["ses:SendEmail", "ses:SendRawEmail"], Resource: "arn:aws:ses:us-east-1:123456789012:identity/*" })]) },
     });
     t.hasResourceProperties("AWS::ECR::Repository", { RepositoryName: "vendorstreet", LifecyclePolicy: Match.anyValue() });
   });

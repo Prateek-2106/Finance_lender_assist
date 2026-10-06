@@ -70,7 +70,7 @@ export class VendorStreetStack extends cdk.Stack {
 
     // Email from no-reply@yourdomain.com through SES, with DKIM records added to Route 53 automatically.
     // New SES accounts start in the sandbox (only verified recipients) until production access is requested.
-    const mailIdentity = new ses.EmailIdentity(this, "MailIdentity", { identity: ses.Identity.publicHostedZone(zone) });
+    new ses.EmailIdentity(this, "MailIdentity", { identity: ses.Identity.publicHostedZone(zone) });
 
     const service = new patterns.ApplicationLoadBalancedFargateService(this, "Web", {
       cluster,
@@ -109,7 +109,7 @@ export class VendorStreetStack extends cdk.Stack {
     service.taskDefinition.taskRole.addToPrincipalPolicy(
       new iam.PolicyStatement({
         actions: ["ses:SendEmail", "ses:SendRawEmail"],
-        resources: [`arn:aws:ses:${this.region}:${this.account}:identity/${mailIdentity.emailIdentityName}`],
+        resources: [`arn:aws:ses:${this.region}:${this.account}:identity/*`], // sandbox also checks the recipient's identity
       }),
     );
     service.targetGroup.configureHealthCheck({ path: "/health", healthyHttpCodes: "200", interval: cdk.Duration.seconds(15) });
