@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { E2E_KEY, E2E_UW_KEY } from "../scripts/e2e-server";
+import { E2E_KEY, E2E_UW_KEY } from "./constants";
 
 test.describe.configure({ mode: "serial" });
 

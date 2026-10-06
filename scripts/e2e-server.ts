@@ -7,9 +7,7 @@ import type { LlmClient } from "../src/deps";
 import type { Mailer, OutgoingEmail } from "../src/notify/mailer";
 import express from "express";
 
-export const E2E_KEY = "sk_e2e_dashboard_key_0000000000000000";
-export const E2E_UW_KEY = "uw_e2e_priya_000000000";
-export const E2E_DEMO_UW_KEY = "uw_e2e_demo_public_00";
+import { E2E_DEMO_UW_KEY, E2E_KEY, E2E_UW_KEY } from "../e2e/constants";
 
 // Emails are recorded, not sent; tests read them from /__test/emails.
 const outbox: (Omit<OutgoingEmail, "attachments"> & { attachments: string[] })[] = [];

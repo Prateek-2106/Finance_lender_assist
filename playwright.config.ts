@@ -14,8 +14,9 @@ export default defineConfig({
     // PW_CHANNEL=chrome (or msedge) uses the browser already installed instead of downloading one
     ...(process.env.PW_CHANNEL ? { channel: process.env.PW_CHANNEL } : {}),
     launchOptions: {
-      // *.lvh.me → 127.0.0.1 without needing DNS (works offline and in CI)
-      args: ["--host-resolver-rules=MAP *.lvh.me 127.0.0.1"],
+      // lvh.me and *.lvh.me → 127.0.0.1 without DNS: works offline, in CI, and behind routers or
+      // secure-DNS settings that refuse public names pointing at 127.0.0.1
+      args: ["--host-resolver-rules=MAP lvh.me 127.0.0.1, MAP *.lvh.me 127.0.0.1"],
       ...(process.env.PW_CHROMIUM ? { executablePath: process.env.PW_CHROMIUM } : {}),
     },
   },
