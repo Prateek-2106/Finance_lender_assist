@@ -245,6 +245,57 @@ export function repoContract(name: string, makeRepos: () => Promise<Repos>) {
       });
     });
 
+    describe("accounts", () => {
+      it("one user per email, whatever its case", async () => {
+        const a = await repos.users.upsertByEmail("Ann@Example.com ");
+        const b = await repos.users.upsertByEmail("ann@example.com");
+        expect(a.created).toBe(true);
+        expect(b.created).toBe(false);
+        expect(b.user.id).toBe(a.user.id);
+        expect(a.user.email).toBe("ann@example.com");
+        const u = await repos.users.update(a.user.id, { name: "Ann", lastLoginAt: new Date("2026-10-06T00:00:00Z") });
+        expect(u.name).toBe("Ann");
+        expect((await repos.users.findById(a.user.id))?.lastLoginAt).toEqual(new Date("2026-10-06T00:00:00Z"));
+      });
+
+      it("memberships: adding twice keeps the first role; listed per user", async () => {
+        await repos.memberships.add({ userId: "u1", tenantId: "t1", role: "owner" });
+        await repos.memberships.add({ userId: "u1", tenantId: "t1", role: "staff" });
+        await repos.memberships.add({ userId: "u1", tenantId: "t2", role: "staff" });
+        expect((await repos.memberships.find("u1", "t1"))?.role).toBe("owner");
+        expect(await repos.memberships.find("u2", "t1")).toBeNull();
+        expect((await repos.memberships.listByUser("u1")).map((m) => m.tenantId).sort()).toEqual(["t1", "t2"]);
+      });
+
+      it("a sign-in token works once, and never after it expires", async () => {
+        const now = new Date("2026-10-06T12:00:00Z");
+        await repos.loginTokens.create({ tokenHash: "h1", email: "a@x.co", expiresAt: new Date(+now + 60_000) });
+        await repos.loginTokens.create({ tokenHash: "h2", email: "a@x.co", expiresAt: new Date(+now - 1) });
+        const [first, second] = await Promise.all([repos.loginTokens.consume("h1", now), repos.loginTokens.consume("h1", now)]);
+        expect([first, second].filter(Boolean)).toHaveLength(1); // exactly one of two simultaneous clicks wins
+        expect((first ?? second)!.email).toBe("a@x.co");
+        expect(await repos.loginTokens.consume("h2", now)).toBeNull();
+        expect(await repos.loginTokens.consume("nope", now)).toBeNull();
+      });
+
+      it("sessions are found until they expire, and can be deleted", async () => {
+        const now = new Date("2026-10-06T12:00:00Z");
+        await repos.sessions.create({ idHash: "s1", userId: "u1", expiresAt: new Date(+now + 60_000) });
+        await repos.sessions.create({ idHash: "s2", userId: "u1", expiresAt: new Date(+now - 1) });
+        expect((await repos.sessions.find("s1", now))?.userId).toBe("u1");
+        expect(await repos.sessions.find("s2", now)).toBeNull();
+        await repos.sessions.delete("s1");
+        expect(await repos.sessions.find("s1", now)).toBeNull();
+      });
+
+      it("purging a business removes its memberships", async () => {
+        const t = await repos.tenants.create({ name: "Gone", subdomain: "gone", taxRateBps: 0, priceList: [], apiKeyHash: "h" });
+        await repos.memberships.add({ userId: "u9", tenantId: t.id, role: "owner" });
+        await repos.purgeTenant(t.id);
+        expect(await repos.memberships.listByUser("u9")).toEqual([]);
+      });
+    });
+
     describe("demo cleanup", () => {
       it("lists expired demos and purges a business with everything it owns, leaving others alone", async () => {
         const mk = (sub: string, expiresAt?: Date) =>

@@ -197,3 +197,39 @@ export interface BankTransaction {
   fingerprint: string; // dedupe key: re-uploading a statement adds nothing
   createdAt: Date;
 }
+
+// ── Accounts ────────────────────────────────────────────────
+
+/** A person who signs in with their email. Owns or works at one or more businesses. */
+export interface User {
+  id: Id;
+  email: string; // lower-case, verified by the sign-in link itself
+  name?: string;
+  createdAt: Date;
+  lastLoginAt?: Date;
+}
+
+export type MemberRole = "owner" | "staff";
+export interface Membership {
+  userId: Id;
+  tenantId: Id;
+  role: MemberRole;
+  createdAt: Date;
+}
+
+/** A one-time sign-in link. Only a hash of the token is stored. */
+export interface LoginToken {
+  tokenHash: string;
+  email: string;
+  expiresAt: Date;
+  usedAt?: Date;
+  createdAt: Date;
+}
+
+/** A signed-in browser. The cookie holds a random id; only its hash is stored. */
+export interface Session {
+  idHash: string;
+  userId: Id;
+  createdAt: Date;
+  expiresAt: Date;
+}

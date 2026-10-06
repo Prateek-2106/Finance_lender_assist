@@ -266,3 +266,17 @@ Guard rails for a public site, all on by default in production (`NODE_ENV=produc
 - **No way around CloudFront:** the instance accepts port 80 only from CloudFront's address ranges, and the app refuses requests without CloudFront's secret `X-Origin-Verify` header (`ORIGIN_SECRET`).
 
 Locally, everything works the same with sign-up open: `npm run dev`, open `http://localhost:3000`, press **Try it** (demo underwriter key `uw_demo_public_0001`). `RATE_LIMITS=on` turns the limits on locally.
+
+## Accounts: sign in by email
+
+Real businesses are created by people with verified emails; demos stay one click away.
+
+- **Sign in** (`/signin`): enter an email and get a one-time link, valid for 15 minutes. There's no password and no separate sign-up: the first link creates the account. The response is the same for every address, so it can't be used to find out who has an account. Links per address (5 an hour) and per visitor (10 an hour) are limited.
+- **The link** (`/auth/verify#token=…`): the token sits after `#`, so browsers never send it to a server or into logs. The page posts it once. Only a SHA-256 of each token and session id is stored, and expired ones are deleted automatically (MongoDB TTL indexes).
+- **The session:** a 30-day `HttpOnly; Secure; SameSite=Lax` cookie on `.vendorstreet.dev`, so one sign-in covers the platform and every business subdomain. Because subdomains count as the same site, every cookie-authenticated change must also carry an `Origin` that matches its own address. A page on another business's subdomain can't act with your cookie.
+- **Your businesses** (`/account`): create up to 3, each with a reserved-name check (platform words, banks and big brands) so nobody can open `chase.vendorstreet.dev`. Notifications go to your email by default.
+- **API keys still work** for integrations and demos, and a wrong key is refused even if you're signed in.
+
+Locally, sign-in emails land in Mailpit (http://localhost:8025). With `MAIL_TRANSPORT=none`, the link is printed in the server window instead (never in production). Open the app at `http://lvh.me:3000`, not `localhost`, so the cookie covers the business subdomains.
+
+**On the live site, SES starts in sandbox mode:** it only delivers to addresses you've verified in SES. Request production access (SES → Account dashboard) before inviting anyone else to sign in.

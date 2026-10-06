@@ -3,6 +3,17 @@ import { api } from "../api";
 import { ErrorText } from "../ui/bits";
 import { Guide } from "../tour/Tour";
 
+/** "Sign in", or "Your businesses" when already signed in. Always on the platform's own address, where the cookie lives. */
+function AccountLink({ baseDomain }: { baseDomain: string }) {
+  const [signedIn, setSignedIn] = useState(false);
+  const base = baseDomain === "localhost" ? "lvh.me" : baseDomain;
+  const apex = `${location.protocol}//${base}${location.port ? `:${location.port}` : ""}`;
+  useEffect(() => {
+    api("/auth/me").then(() => setSignedIn(true), () => {});
+  }, []);
+  return <a className="button secondary small" href={`${apex}${signedIn ? "/account" : "/signin"}`}>{signedIn ? "Your businesses" : "Sign in"}</a>;
+}
+
 export type Platform = {
   baseDomain: string;
   signupOpen: boolean;
@@ -56,7 +67,10 @@ export function Home({ platform }: { platform: Platform }) {
   return (
     <div className="home">
       <header className="hero" data-tour="hero">
-        <p className="eyebrow">Vendor Street</p>
+        <div className="topbar">
+          <p className="eyebrow">Vendor Street</p>
+          <AccountLink baseDomain={platform.baseDomain} />
+        </div>
         <h1>Run a small business from one place, and watch the numbers build themselves.</h1>
         <p className="lede">
           A plumber gets a website that takes requests, AI-drafted quotes they approve, invoices and payments, and a dashboard that adds it all up.

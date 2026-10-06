@@ -7,6 +7,7 @@ import { Estimates } from "./Estimates";
 import { Funding } from "./Funding";
 import { Insights } from "./Insights";
 import { Guide } from "../tour/Tour";
+import { apexUrl } from "../account/Account";
 import type { PageId } from "../tour/steps";
 
 const SECTIONS = [
@@ -18,18 +19,21 @@ const SECTIONS = [
 
 export function Dashboard() {
   const [site, setSite] = useState<{ name: string } | null>(null);
-  const [signedIn, setSignedIn] = useState(!!session.get());
+  // Signed in by API key (kept in the browser) or by account (an HttpOnly cookie we can't see, so we ask)
+  const [signedIn, setSignedIn] = useState<boolean | null>(session.get() ? true : null);
   const [demo, setDemo] = useState<boolean | undefined>(undefined); // known once settings load
   const [parts, go] = useHash();
   const section = SECTIONS.some((s) => s.id === parts[0]) ? parts[0]! : "leads";
 
   useEffect(() => {
+    if (signedIn === null) api("/settings").then(() => setSignedIn(true), () => setSignedIn(false));
     api<{ site: { name: string } }>("/site").then((r) => {
       setSite(r.site);
       document.title = `${r.site.name} · Vendor Street`;
     });
   }, []);
 
+  if (signedIn === null) return null;
   if (!signedIn) return <SignIn name={site?.name} onDone={() => setSignedIn(true)} />;
 
   return (
@@ -45,8 +49,9 @@ export function Dashboard() {
         </nav>
         <button
           className="secondary small"
-          onClick={() => {
+          onClick={async () => {
             session.clear();
+            await api("/auth/logout", { method: "POST" }).catch(() => {});
             setSignedIn(false);
           }}
         >
@@ -83,9 +88,13 @@ function SignIn({ name, onDone }: { name?: string; onDone: () => void }) {
     <div className="site">
       <header>
         <h1>{name ?? "Vendor Street"}</h1>
-        <p className="quiet">Sign in with the API key you got when you created this business.</p>
+        <p className="quiet">Sign in to manage this business.</p>
       </header>
-      <form className="stack" onSubmit={submit}>
+      <div>
+        <button onClick={async () => (location.href = `${await apexUrl()}/signin?next=${encodeURIComponent(location.href)}`)}>Continue with email</button>
+      </div>
+      <form className="stack" onSubmit={submit} aria-label="Key sign-in">
+        <p className="small quiet">Or use an API key (integrations and demos):</p>
         <label>
           API key
           <input name="key" required autoComplete="off" spellCheck={false} placeholder="sk_…" />

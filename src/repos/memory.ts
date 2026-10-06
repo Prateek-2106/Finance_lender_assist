@@ -1,6 +1,6 @@
 // Reference implementation of the Repos contract, used by most tests.
 import { randomUUID } from "node:crypto";
-import type { BankTransaction, Customer, Estimate, FundingApplication, Id, Invoice, Lead, Message, Tenant } from "../domain";
+import type { BankTransaction, Customer, Estimate, LoginToken, Membership, Session, User, FundingApplication, Id, Invoice, Lead, Message, Tenant } from "../domain";
 import { ConflictError, NotFoundError } from "../errors";
 import type { Repos } from "./types";
 
@@ -17,6 +17,10 @@ export function createMemoryRepos(): Repos {
   const customers: Customer[] = [];
   const messages: Message[] = [];
   const usage = new Map<string, number>();
+  const users = new Map<Id, User>();
+  const memberships: Membership[] = [];
+  const loginTokens = new Map<string, LoginToken>();
+  const sessions = new Map<string, Session>();
 
   const hostTaken = (hostname: string | undefined, exceptId?: Id) =>
     !!hostname && [...tenants.values()].some((t) => t.id !== exceptId && t.customDomain?.hostname === hostname);
@@ -244,6 +248,67 @@ export function createMemoryRepos(): Repos {
         return n;
       },
     },
+    users: {
+      async upsertByEmail(raw) {
+        const email = raw.trim().toLowerCase();
+        const found = [...users.values()].find((u) => u.email === email);
+        if (found) return { user: clone(found), created: false };
+        const u: User = { id: randomUUID(), email, createdAt: new Date() };
+        users.set(u.id, u);
+        return { user: clone(u), created: true };
+      },
+      async findById(id) {
+        const u = users.get(id);
+        return u ? clone(u) : null;
+      },
+      async update(id, patch) {
+        const u = users.get(id);
+        if (!u) throw new NotFoundError("User not found");
+        Object.assign(u, clone(patch));
+        return clone(u);
+      },
+    },
+    memberships: {
+      async add(input) {
+        const existing = memberships.find((m) => m.userId === input.userId && m.tenantId === input.tenantId);
+        if (existing) return clone(existing);
+        const m: Membership = { ...clone(input), createdAt: new Date() };
+        memberships.push(m);
+        return clone(m);
+      },
+      async find(userId, tenantId) {
+        const m = memberships.find((x) => x.userId === userId && x.tenantId === tenantId);
+        return m ? clone(m) : null;
+      },
+      async listByUser(userId) {
+        return memberships.filter((m) => m.userId === userId).map(clone);
+      },
+    },
+    loginTokens: {
+      async create(input) {
+        loginTokens.set(input.tokenHash, { ...clone(input), createdAt: new Date() });
+      },
+      async consume(tokenHash, now) {
+        const t = loginTokens.get(tokenHash);
+        if (!t || t.usedAt || t.expiresAt <= now) return null;
+        t.usedAt = now;
+        return clone(t);
+      },
+    },
+    sessions: {
+      async create(input) {
+        const s: Session = { ...clone(input), createdAt: new Date() };
+        sessions.set(s.idHash, s);
+        return clone(s);
+      },
+      async find(idHash, now) {
+        const s = sessions.get(idHash);
+        return s && s.expiresAt > now ? clone(s) : null;
+      },
+      async delete(idHash) {
+        sessions.delete(idHash);
+      },
+    },
     async purgeTenant(tenantId) {
       const keep = <T extends { tenantId: Id }>(xs: T[]) => xs.splice(0, xs.length, ...xs.filter((x) => x.tenantId !== tenantId));
       keep(leads);
@@ -253,6 +318,7 @@ export function createMemoryRepos(): Repos {
       for (const m of [estimates, invoices, applications] as Map<Id, { tenantId: Id }>[])
         for (const [id, x] of m) if (x.tenantId === tenantId) m.delete(id);
       counters.delete(tenantId);
+      keep(memberships);
       tenants.delete(tenantId);
     },
   };

@@ -15,7 +15,9 @@ export interface Config {
   /** AI calls allowed per day, across everyone and per business. */
   aiDailyLimit?: { global: number; perBusiness: number };
   /** Per-visitor limits on public endpoints; unset = no limits (tests, local dev). */
-  rateLimits?: { leadsPerHour: number; demosPerHour: number };
+  rateLimits?: { leadsPerHour: number; demosPerHour: number; signInsPerHour?: number };
+  /** True on the live site: never print sign-in links or other secrets to the console. */
+  production?: boolean;
   /** Proxies in front of the app (CloudFront = 1). Decides which X-Forwarded-For entry is the visitor. */
   trustProxyHops?: number;
   /** CloudFront adds this as X-Origin-Verify; requests without it are refused. */

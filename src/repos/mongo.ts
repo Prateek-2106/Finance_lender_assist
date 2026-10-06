@@ -1,5 +1,5 @@
 import { MongoServerError, ObjectId, type Db } from "mongodb";
-import type { BankTransaction, Customer, Estimate, FundingApplication, Invoice, Lead, Message, Tenant } from "../domain";
+import type { BankTransaction, Customer, Estimate, LoginToken, Membership, Session, User, FundingApplication, Invoice, Lead, Message, Tenant } from "../domain";
 import { ConflictError, NotFoundError } from "../errors";
 import type { Repos } from "./types";
 
@@ -39,6 +39,10 @@ export async function createMongoRepos(db: Db): Promise<Repos> {
   const txns = db.collection<Doc<BankTransaction>>("transactions");
   const customers = db.collection<Doc<Customer>>("customers");
   const messages = db.collection<Doc<Message>>("messages");
+  const users = db.collection<Doc<User>>("users");
+  const memberships = db.collection<Membership & { _id: string }>("memberships");
+  const loginTokens = db.collection<Omit<LoginToken, "tokenHash"> & { _id: string }>("login_tokens");
+  const sessions = db.collection<Omit<Session, "idHash"> & { _id: string }>("sessions");
 
   await Promise.all([
     tenants.createIndex({ subdomain: 1 }, { unique: true }),
@@ -47,6 +51,12 @@ export async function createMongoRepos(db: Db): Promise<Repos> {
       { unique: true, partialFilterExpression: { "customDomain.hostname": { $exists: true } } },
     ),
     leads.createIndex({ tenantId: 1, createdAt: -1, _id: -1 }),
+    users.createIndex({ email: 1 }, { unique: true }),
+    memberships.createIndex({ userId: 1 }),
+    // Expired sign-in links and sessions delete themselves (Mongo checks about once a minute;
+    // reads also check expiresAt, so nothing expired is ever accepted in between).
+    loginTokens.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
+    sessions.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
     tenants.createIndex({ "demo.expiresAt": 1 }, { partialFilterExpression: { "demo.expiresAt": { $exists: true } } }),
     estimates.createIndex({ tenantId: 1, _id: 1 }),
     estimates.createIndex({ tenantId: 1, leadId: 1, status: 1 }),
@@ -264,10 +274,86 @@ export async function createMongoRepos(db: Db): Promise<Repos> {
         return docs.map((d) => fromDoc(d)!);
       },
     },
+    users: {
+      async upsertByEmail(raw) {
+        const email = raw.trim().toLowerCase();
+        const upsert = () =>
+          users.findOneAndUpdate(
+            { email },
+            { $setOnInsert: { _id: newId(), email, createdAt: new Date() } },
+            { upsert: true, returnDocument: "after", includeResultMetadata: true },
+          );
+        try {
+          const r = await upsert();
+          return { user: fromDoc(r.value)!, created: !r.lastErrorObject?.updatedExisting };
+        } catch (e) {
+          // two first-time sign-ins at once: the unique index lets one win; the other just reads it
+          if (e instanceof MongoServerError && e.code === 11000) return { user: fromDoc(await users.findOne({ email }))!, created: false };
+          throw e;
+        }
+      },
+      async findById(id) {
+        return fromDoc(await users.findOne({ _id: id }));
+      },
+      async update(id, patch) {
+        const d = await users.findOneAndUpdate({ _id: id }, toUpdate(patch), { returnDocument: "after" });
+        if (!d) throw new NotFoundError("User not found");
+        return fromDoc(d)!;
+      },
+    },
+    memberships: {
+      async add(input) {
+        const _id = `${input.userId}:${input.tenantId}`;
+        await memberships.updateOne({ _id }, { $setOnInsert: { ...input, createdAt: new Date() } }, { upsert: true });
+        const { _id: _omit, ...m } = (await memberships.findOne({ _id }))!;
+        return m;
+      },
+      async find(userId, tenantId) {
+        const d = await memberships.findOne({ _id: `${userId}:${tenantId}` });
+        if (!d) return null;
+        const { _id: _omit, ...m } = d;
+        return m;
+      },
+      async listByUser(userId) {
+        return (await memberships.find({ userId }).sort({ createdAt: 1 }).toArray()).map(({ _id: _omit, ...m }) => m);
+      },
+    },
+    loginTokens: {
+      async create({ tokenHash, ...rest }) {
+        await loginTokens.insertOne({ _id: tokenHash, ...rest, createdAt: new Date() });
+      },
+      async consume(tokenHash, now) {
+        const d = await loginTokens.findOneAndUpdate(
+          { _id: tokenHash, usedAt: { $exists: false }, expiresAt: { $gt: now } },
+          { $set: { usedAt: now } },
+          { returnDocument: "after" },
+        );
+        if (!d) return null;
+        const { _id, ...rest } = d;
+        return { tokenHash: _id, ...rest };
+      },
+    },
+    sessions: {
+      async create({ idHash, ...rest }) {
+        const s = { ...rest, createdAt: new Date() };
+        await sessions.insertOne({ _id: idHash, ...s });
+        return { idHash, ...s };
+      },
+      async find(idHash, now) {
+        const d = await sessions.findOne({ _id: idHash, expiresAt: { $gt: now } });
+        if (!d) return null;
+        const { _id, ...rest } = d;
+        return { idHash: _id, ...rest };
+      },
+      async delete(idHash) {
+        await sessions.deleteOne({ _id: idHash });
+      },
+    },
     async purgeTenant(tenantId) {
       // Children first, the tenant last: an interrupted purge leaves a tenant to retry, never orphans.
       await Promise.all([leads, estimates, invoices, applications, txns, customers, messages].map((c) => (c as typeof leads).deleteMany({ tenantId })));
       await counters.deleteOne({ _id: `invoice:${tenantId}` });
+      await memberships.deleteMany({ tenantId });
       await tenants.deleteOne({ _id: tenantId });
     },
     usage: {

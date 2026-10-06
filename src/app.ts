@@ -16,6 +16,7 @@ import { underwritingRouter } from "./routes/underwriting"; // step 11
 import { ownerRouter } from "./routes/owner"; // step 11
 import { Notifier } from "./notify/notifier"; // step 11
 import { platformRouter } from "./routes/platform"; // step 12
+import { authRouter } from "./routes/auth"; // accounts
 
 export function createApp(deps: Deps) {
   const app = express();
@@ -43,6 +44,7 @@ export function createApp(deps: Deps) {
   // Platform-level routes (no tenant from the Host header)
   app.use("/api/tenants", tenantsRouter(deps));
   app.use("/api", platformRouter(deps)); // /api/platform, /api/demo (step 12)
+  app.use("/api/auth", authRouter(deps, notifier)); // sign in by email, your businesses
   app.use("/webhooks", webhooksRouter(deps, notifier));
   app.use("/api/underwriting", underwritingRouter(deps, notifier)); // OPF-side staff, across all businesses
 
@@ -63,7 +65,7 @@ export function createApp(deps: Deps) {
     // Vite puts a content hash in every file name under /assets, so those can be cached for a year.
     app.use("/assets", express.static(resolve(webDir, "assets"), { immutable: true, maxAge: "365d", fallthrough: false }));
     app.use(express.static(webDir, { index: false }));
-    app.get(/^\/((app|underwriting|scoring)(\/.*)?)?$/, (_req, res) => res.sendFile(resolve(webDir, "index.html")));
+    app.get(/^\/((app|underwriting|scoring|signin|account|auth\/verify)(\/.*)?)?$/, (_req, res) => res.sendFile(resolve(webDir, "index.html")));
   }
 
   app.use(notFoundHandler);

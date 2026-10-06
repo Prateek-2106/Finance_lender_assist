@@ -1,6 +1,6 @@
 // The contract every storage backend must satisfy.
 // Implemented by repos/memory.ts (tests, local dev) and repos/mongo.ts.
-import type { BankTransaction, Contact, Customer, Estimate, FundingApplication, FundingDecision, Id, Invoice, Lead, Message, MessageStatus, Tenant, TxnCategory } from "../domain";
+import type { BankTransaction, Contact, Customer, LoginToken, Membership, Session, User, Estimate, FundingApplication, FundingDecision, Id, Invoice, Lead, Message, MessageStatus, Tenant, TxnCategory } from "../domain";
 
 export type NewTenant = Omit<Tenant, "id" | "createdAt">;
 /** `createdAt` may be set explicitly only to seed history (demo businesses); normal code lets the repo stamp it. */
@@ -93,6 +93,33 @@ export interface UsageRepo {
   increment(key: string): Promise<number>;
 }
 
+export interface UserRepo {
+  /** Finds the user with this email (case-insensitive) or creates one. */
+  upsertByEmail(email: string): Promise<{ user: User; created: boolean }>;
+  findById(id: Id): Promise<User | null>;
+  update(id: Id, patch: Partial<Pick<User, "name" | "lastLoginAt">>): Promise<User>;
+}
+
+export interface MembershipRepo {
+  /** Adds the user to the business; adding twice keeps the first role. */
+  add(input: Omit<Membership, "createdAt">): Promise<Membership>;
+  find(userId: Id, tenantId: Id): Promise<Membership | null>;
+  listByUser(userId: Id): Promise<Membership[]>;
+}
+
+export interface LoginTokenRepo {
+  create(input: Omit<LoginToken, "createdAt" | "usedAt">): Promise<void>;
+  /** Marks the token used and returns it, atomically, only if it is unused and unexpired. */
+  consume(tokenHash: string, now: Date): Promise<LoginToken | null>;
+}
+
+export interface SessionRepo {
+  create(input: Omit<Session, "createdAt">): Promise<Session>;
+  /** The session if it exists and hasn't expired. */
+  find(idHash: string, now: Date): Promise<Session | null>;
+  delete(idHash: string): Promise<void>;
+}
+
 export interface Repos {
   tenants: TenantRepo;
   leads: LeadRepo;
@@ -103,6 +130,10 @@ export interface Repos {
   customers: CustomerRepo;
   messages: MessageRepo;
   usage: UsageRepo;
+  users: UserRepo;
+  memberships: MembershipRepo;
+  loginTokens: LoginTokenRepo;
+  sessions: SessionRepo;
   /** Deletes a business and everything it owns (demo cleanup). */
   purgeTenant(tenantId: Id): Promise<void>;
 }

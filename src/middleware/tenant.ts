@@ -1,6 +1,7 @@
 import type { RequestHandler, Response } from "express";
 import type { Deps } from "../deps";
-import type { Tenant } from "../domain";
+import type { Membership, Tenant } from "../domain";
+import { currentUser, sameOrigin } from "../auth/session";
 import { ForbiddenError, NotFoundError, UnauthorizedError } from "../errors";
 import { verifyApiKey } from "../lib/apiKey";
 
@@ -32,13 +33,29 @@ export function resolveTenant(deps: Deps): RequestHandler {
     if (tenant.demo && new Date(tenant.demo.expiresAt) < new Date())
       throw new NotFoundError("This demo business has expired. Start a new one from the homepage.");
     res.locals.tenant = tenant;
+    // Signed in with an account? Note whether that person belongs to this business.
+    const auth = await currentUser(deps.repos, req, res);
+    res.locals.membership = auth ? await deps.repos.memberships.find(auth.user.id, tenant.id) : null;
     next();
   };
 }
 
+/**
+ * The owner's side of a business: either its API key (integrations, scripts, demos), or a signed-in
+ * account that belongs to this business. A key that's present but wrong is refused outright.
+ */
 export const requireApiKey: RequestHandler = (req, res, next) => {
   const m = /^Bearer (\S+)$/.exec(req.get("authorization") ?? "");
-  if (!m) throw new UnauthorizedError("Missing API key");
-  if (!verifyApiKey(m[1]!, getTenant(res).apiKeyHash)) throw new ForbiddenError("API key does not match this site");
-  next();
+  if (m) {
+    if (!verifyApiKey(m[1]!, getTenant(res).apiKeyHash)) throw new ForbiddenError("API key does not match this site");
+    return next();
+  }
+  const membership = res.locals.membership as Membership | null | undefined;
+  if (membership) {
+    if (!sameOrigin(req)) throw new ForbiddenError("Request didn't come from this site");
+    return next();
+  }
+  if (res.locals.auth) throw new ForbiddenError("Your account doesn't have access to this business");
+  throw new UnauthorizedError("Sign in, or send this business's API key");
 };
+export const requireOwner = requireApiKey;

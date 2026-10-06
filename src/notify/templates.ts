@@ -30,6 +30,19 @@ function itemsTable(e: Pick<Estimate, "lineItems" | "taxRateBps">) {
 }
 
 export const templates = {
+  signInLink(link: string, minutes: number): Rendered {
+    const lines = [
+      "Here is your link to sign in to Vendor Street.",
+      `It works once and expires in ${minutes} minutes.`,
+      "If you didn't ask to sign in, you can ignore this email; nothing changes without the link.",
+    ];
+    const button = `<p style="margin:0 0 16px"><a href="${esc(link)}" style="display:inline-block;background:#0f6e6a;color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none;font-weight:600">Sign in</a></p>`;
+    return {
+      subject: "Your Vendor Street sign-in link",
+      text: [lines[0], link, lines[1], lines[2]].join("\n\n"),
+      html: wrap("Vendor Street", p(lines[0]!) + button + p(lines[1]!) + p(lines[2]!)).replace("Sent by Vendor Street on behalf of Vendor Street.", "Sent by Vendor Street."),
+    };
+  },
   leadReceivedCustomer(t: Tenant, lead: Lead): Rendered {
     const lines = [`Hi ${lead.name},`, `Thanks for reaching out. ${t.name} got your request and will get back to you with a quote soon.`, `Your request: "${lead.message}"`];
     return { subject: `We got your request - ${t.name}`, text: lines.join("\n\n"), html: wrap(t.name, lines.map(p).join("")) };
