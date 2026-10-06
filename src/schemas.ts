@@ -149,10 +149,13 @@ export const PriceListSchema = z
   .refine((xs) => new Set(xs.map((x) => x.sku.toUpperCase())).size === xs.length, { message: "Duplicate SKU" });
 
 export const SettingsSchema = z.object({
+  // "" clears it; leaving the key out leaves it as it is
   ownerEmail: z
     .string()
     .trim()
     .toLowerCase()
     .transform((e) => (e === "" ? undefined : e))
-    .pipe(z.email().optional()),
+    .pipe(z.email().optional())
+    .optional(),
+  taxRateBps: z.number().int().min(0).max(2000).optional(), // 875 = 8.75%
 });

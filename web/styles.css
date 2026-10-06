@@ -261,3 +261,15 @@ code.key { display: block; word-break: break-all; background: var(--paper); bord
 .pw input { flex: 1; min-width: 0; }
 .code-input { font-size: var(--step-2); letter-spacing: 0.4em; font-variant-numeric: tabular-nums; max-width: 12rem; }
 .field { display: grid; gap: 0.25rem; } .field > label { font-weight: 500; }
+
+/* ── price list ───────────────────────────────────────── */
+.price-table td { padding: 0.3rem 0.35rem; vertical-align: middle; }
+.price-table input { padding: 0.35rem 0.45rem; }
+.price-table td:nth-child(1) { min-width: 14rem; }
+.price-table td:nth-child(2) { width: 7rem; }
+.price-table td:nth-child(3) { width: 6rem; }
+.price-table td:nth-child(5) { width: 9rem; }
+.price-table input.num { text-align: right; }
+.file-button { position: relative; overflow: hidden; }
+.file-button input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.csv-sample { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius); padding: 0.6rem; font-size: var(--step--1); overflow-x: auto; }

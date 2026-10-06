@@ -6,6 +6,7 @@ import { Leads } from "./Leads";
 import { Estimates } from "./Estimates";
 import { Funding } from "./Funding";
 import { Insights } from "./Insights";
+import { PriceList } from "./PriceList";
 import { Guide } from "../tour/Tour";
 import { apexUrl } from "../account/Account";
 import type { PageId } from "../tour/steps";
@@ -13,6 +14,7 @@ import type { PageId } from "../tour/steps";
 const SECTIONS = [
   { id: "leads", name: "Leads" },
   { id: "estimates", name: "Estimates" },
+  { id: "prices", name: "Price list" },
   { id: "funding", name: "Funding" },
   { id: "insights", name: "Insights" },
 ];
@@ -64,6 +66,7 @@ export function Dashboard() {
         {section === "estimates" && <Estimates selected={parts[1]} go={go} />}
         {section === "funding" && <Funding selected={parts[1]} go={go} />}
         {section === "insights" && <Insights />}
+        {section === "prices" && <PriceList />}
         {demo !== undefined && <Guide key={section} page={section as PageId} auto={demo} />}
       </main>
     </div>

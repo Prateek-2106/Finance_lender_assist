@@ -1,5 +1,5 @@
 // What the walkthrough says on each page. Targets are data-tour="…" names on the page's elements.
-export type PageId = "home" | "site" | "leads" | "estimates" | "funding" | "insights" | "underwriting";
+export type PageId = "home" | "site" | "leads" | "estimates" | "prices" | "funding" | "insights" | "underwriting";
 
 export interface Step {
   title: string;
@@ -99,6 +99,19 @@ export const TOURS: Record<PageId, Step[]> = {
       body: "The invoice freezes the customer, items and tax, so later edits never change it. Open the PDF, or record a payment to send a receipt.",
       target: "invoice",
       whenMissing: "Open an invoiced estimate (or create an invoice) to see this part.",
+    },
+  ],
+
+  prices: [
+    {
+      title: "Everything you sell",
+      body: "Your items and services, at your prices. The AI drafts quotes only from this list and never sets a price itself.",
+      target: "price-table",
+    },
+    {
+      title: "Bring your existing list",
+      body: "Import a CSV with name and price columns (code, unit and \"sold in parts\" are optional), review it here, then save.",
+      target: "price-import",
     },
   ],
 

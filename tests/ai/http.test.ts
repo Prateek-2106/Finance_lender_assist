@@ -23,6 +23,25 @@ describe("PUT /api/price-list", () => {
     expect((await request(app).put("/api/price-list").set(as).send(priceList)).body.priceList).toHaveLength(2);
     expect((await request(app).put("/api/price-list").set(as).send([...priceList, priceList[0]])).status).toBe(400);
   });
+
+  it("GET returns the saved list to the owner only", async () => {
+    const { app, as, joe } = await setup();
+    expect((await request(app).get("/api/price-list").set(as)).body.priceList).toEqual([]);
+    await request(app).put("/api/price-list").set(as).send(priceList);
+    expect((await request(app).get("/api/price-list").set(as)).body.priceList).toEqual(priceList);
+    expect((await request(app).get("/api/price-list").set({ Host: joe.host })).status).toBe(401);
+  });
+
+  it("PATCH /settings can change only the tax rate, leaving the owner email alone", async () => {
+    const { app, as } = await setup();
+    const before = (await request(app).get("/api/settings").set(as)).body.settings;
+    const res = await request(app).patch("/api/settings").set(as).send({ taxRateBps: 650 });
+    expect(res.status).toBe(200);
+    const after = (await request(app).get("/api/settings").set(as)).body.settings;
+    expect(after.taxRateBps).toBe(650);
+    expect(after.ownerEmail).toBe(before.ownerEmail);
+    expect((await request(app).patch("/api/settings").set(as).send({ taxRateBps: 5000 })).status).toBe(400);
+  });
 });
 
 describe("POST /api/leads/:id/draft-estimate", () => {

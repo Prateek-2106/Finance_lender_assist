@@ -32,6 +32,10 @@ test("create an account with a password, confirm the email, run a business, rese
   await page.getByRole("link", { name: "Open the dashboard" }).click();
   await page.waitForURL(/riverside-electric\.lvh\.me:3100\/app/);
   await expect(page.getByRole("heading", { name: "Leads" })).toBeVisible();
+  // A new business is pointed at its price list before anything else
+  await page.getByRole("link", { name: "Add items and services →" }).click();
+  await expect(page.getByRole("heading", { name: "Price list" })).toBeVisible();
+  await page.goto("http://riverside-electric.lvh.me:3100/app#/leads");
 
   // Sign out, then back in with the password
   await page.getByRole("button", { name: "Sign out" }).click();

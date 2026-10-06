@@ -51,6 +51,10 @@ export function leadsRouter(deps: Deps, notifier: Notifier) {
     res.json({ lead });
   });
 
+  r.get("/price-list", requireApiKey, (_req, res) => {
+    res.json({ priceList: getTenant(res).priceList });
+  });
+
   r.put("/price-list", requireApiKey, async (req, res) => {
     const priceList = parseOrThrow(PriceListSchema, req.body);
     const t = await repos.tenants.update(getTenant(res).id, { priceList });
@@ -60,7 +64,7 @@ export function leadsRouter(deps: Deps, notifier: Notifier) {
   r.post("/leads/:id/draft-estimate", requireApiKey, async (req, res) => {
     if (!llm) throw new ServiceUnavailableError("No language model configured (set LLM_PROVIDER)");
     const tenant = getTenant(res);
-    if (tenant.priceList.length === 0) throw new InvalidTransitionError("Add a price list first (PUT /api/price-list)");
+    if (tenant.priceList.length === 0) throw new InvalidTransitionError("Add your items and services under Price list first: the AI only quotes from that list.");
     const lead = await repos.leads.findById(tenant.id, String(req.params.id));
     if (!lead) throw new NotFoundError("Lead not found");
 

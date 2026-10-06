@@ -131,3 +131,34 @@ test("insights show what happened after payment, and every email sent", async ({
   await expect(log.getByRole("row", { name: /Invoice ann@example.test Sent/ })).toBeVisible();
   await expect(log.getByRole("row", { name: /Funding: approved/ })).toBeVisible();
 });
+
+test("the owner adds a service to the price list, imports more from a CSV, and it all persists", async ({ page }) => {
+  await signIn(page, "/app#/prices");
+  await expect(page.getByRole("heading", { name: "Price list" })).toBeVisible();
+  const rows = page.locator(".price-table tbody tr");
+  const before = await rows.count();
+  await page.getByRole("button", { name: "+ Add item" }).click();
+  await page.getByLabel(`Name, row ${before + 1}`).fill("Drain cleaning");
+  await page.getByRole("button", { name: "Save price list" }).click();
+  await expect(page.getByRole("alert")).toHaveText(`Row ${before + 1} needs a name and a price`);
+  await page.getByLabel(`Price, row ${before + 1}`).fill("150");
+  await page.getByLabel("Sales tax %").fill("8.75");
+  await page.getByRole("button", { name: "Save price list" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Saved" })).toContainText(`Saved ${before + 1} items`);
+
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "prices.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from('name,price,unit,sold_in_parts\nCamera inspection,199,,no\n"Trenching, per foot",12.5,foot,yes\n'),
+  });
+  await expect(page.getByText("2 items read from prices.csv")).toBeVisible();
+  await page.getByRole("button", { name: "Save price list" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Saved" })).toContainText(`Saved ${before + 3} items`);
+
+  await page.reload();
+  await expect(rows).toHaveCount(before + 3);
+  await expect(page.getByLabel(`Name, row ${before + 1}`)).toHaveValue("Drain cleaning");
+  await expect(page.getByLabel(`Code, row ${before + 1}`)).toHaveValue("DRAIN-CLEANING");
+  await expect(page.getByLabel(`Can be sold in parts, row ${before + 3}`)).toBeChecked();
+  await expect(page.getByLabel("Sales tax %")).toHaveValue("8.75");
+});

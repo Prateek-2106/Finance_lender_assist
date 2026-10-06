@@ -12,12 +12,15 @@ export function ownerRouter({ repos }: Deps) {
 
   r.get("/settings", (_req, res) => {
     const t = getTenant(res);
-    res.json({ settings: { name: t.name, ownerEmail: t.ownerEmail ?? null, demo: t.demo ?? null } });
+    res.json({ settings: { name: t.name, ownerEmail: t.ownerEmail ?? null, taxRateBps: t.taxRateBps, demo: t.demo ?? null } });
   });
   r.patch("/settings", async (req, res) => {
-    const { ownerEmail } = parseOrThrow(SettingsSchema, req.body);
-    const t = await repos.tenants.update(getTenant(res).id, { ownerEmail });
-    res.json({ settings: { name: t.name, ownerEmail: t.ownerEmail ?? null } });
+    const input = parseOrThrow(SettingsSchema, req.body);
+    const patch: { ownerEmail?: string; taxRateBps?: number } = {};
+    if ("ownerEmail" in (req.body ?? {})) patch.ownerEmail = input.ownerEmail;
+    if (input.taxRateBps !== undefined) patch.taxRateBps = input.taxRateBps;
+    const t = await repos.tenants.update(getTenant(res).id, patch);
+    res.json({ settings: { name: t.name, ownerEmail: t.ownerEmail ?? null, taxRateBps: t.taxRateBps, demo: t.demo ?? null } });
   });
   r.get("/messages", async (_req, res) => {
     const list = await repos.messages.listByTenant(getTenant(res).id, { limit: 100 });

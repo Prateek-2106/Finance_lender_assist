@@ -9,6 +9,7 @@ export function Leads({ go }: { go: (path: string) => void }) {
   const [customers, setCustomers] = useState<Map<string, Customer>>(new Map());
   const [latest, setLatest] = useState<Map<string, Estimate>>(new Map()); // newest estimate per lead
   const [error, setError] = useState<unknown>(null);
+  const [noPrices, setNoPrices] = useState(false);
 
   useEffect(() => {
     api<{ leads: Lead[] }>("/leads").then((r) => setLeads(r.leads), setError);
@@ -17,6 +18,7 @@ export function Leads({ go }: { go: (path: string) => void }) {
       for (const e of r.estimates) if (e.leadId && !m.has(e.leadId)) m.set(e.leadId, e); // list is newest first
       setLatest(m);
     }, () => {});
+    api<{ priceList: unknown[] }>("/price-list").then((r) => setNoPrices(r.priceList.length === 0), () => {});
     api<{ customers: Customer[] }>("/customers").then((r) => setCustomers(new Map(r.customers.map((c) => [c.id, c]))), () => {});
   }, []);
 
@@ -36,6 +38,11 @@ export function Leads({ go }: { go: (path: string) => void }) {
   return (
     <>
       <h2>Leads</h2>
+      {noPrices && (
+        <p className="notice small" role="note">
+          <strong>Add your price list first.</strong> The AI drafts quotes only from your items and prices. <a href="#/prices">Add items and services →</a>
+        </p>
+      )}
       <ErrorText error={error} />
       {leads && leads.length === 0 && (
         <p className="empty">No leads yet. Share your website link, or text your business number, and new requests show up here.</p>
