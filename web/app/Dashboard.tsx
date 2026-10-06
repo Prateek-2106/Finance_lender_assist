@@ -91,7 +91,7 @@ function SignIn({ name, onDone }: { name?: string; onDone: () => void }) {
         <p className="quiet">Sign in to manage this business.</p>
       </header>
       <div>
-        <button onClick={async () => (location.href = `${await apexUrl()}/signin?next=${encodeURIComponent(location.href)}`)}>Continue with email</button>
+        <button onClick={async () => (location.href = `${await apexUrl()}/signin?next=${encodeURIComponent(location.href)}`)}>Use my account</button>
       </div>
       <form className="stack" onSubmit={submit} aria-label="Key sign-in">
         <p className="small quiet">Or use an API key (integrations and demos):</p>

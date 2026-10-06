@@ -246,6 +246,13 @@ export function repoContract(name: string, makeRepos: () => Promise<Repos>) {
     });
 
     describe("accounts", () => {
+      it("usage counters can be read without counting", async () => {
+        expect(await repos.usage.peek("x")).toBe(0);
+        await repos.usage.increment("x");
+        await repos.usage.increment("x");
+        expect(await repos.usage.peek("x")).toBe(2);
+      });
+
       it("one user per email, whatever its case", async () => {
         const a = await repos.users.upsertByEmail("Ann@Example.com ");
         const b = await repos.users.upsertByEmail("ann@example.com");
@@ -253,7 +260,10 @@ export function repoContract(name: string, makeRepos: () => Promise<Repos>) {
         expect(b.created).toBe(false);
         expect(b.user.id).toBe(a.user.id);
         expect(a.user.email).toBe("ann@example.com");
-        const u = await repos.users.update(a.user.id, { name: "Ann", lastLoginAt: new Date("2026-10-06T00:00:00Z") });
+        expect((await repos.users.findByEmail(" ANN@example.com"))?.id).toBe(a.user.id);
+        expect(await repos.users.findByEmail("nobody@example.com")).toBeNull();
+        const u = await repos.users.update(a.user.id, { name: "Ann", lastLoginAt: new Date("2026-10-06T00:00:00Z"), passwordHash: "scrypt$x", emailVerifiedAt: new Date("2026-10-06T00:00:00Z") });
+        expect(u.passwordHash).toBe("scrypt$x");
         expect(u.name).toBe("Ann");
         expect((await repos.users.findById(a.user.id))?.lastLoginAt).toEqual(new Date("2026-10-06T00:00:00Z"));
       });
@@ -267,15 +277,24 @@ export function repoContract(name: string, makeRepos: () => Promise<Repos>) {
         expect((await repos.memberships.listByUser("u1")).map((m) => m.tenantId).sort()).toEqual(["t1", "t2"]);
       });
 
-      it("a sign-in token works once, and never after it expires", async () => {
+      it("an emailed code works once, counts every guess, and locks after too many", async () => {
         const now = new Date("2026-10-06T12:00:00Z");
-        await repos.loginTokens.create({ tokenHash: "h1", email: "a@x.co", expiresAt: new Date(+now + 60_000) });
-        await repos.loginTokens.create({ tokenHash: "h2", email: "a@x.co", expiresAt: new Date(+now - 1) });
-        const [first, second] = await Promise.all([repos.loginTokens.consume("h1", now), repos.loginTokens.consume("h1", now)]);
-        expect([first, second].filter(Boolean)).toHaveLength(1); // exactly one of two simultaneous clicks wins
-        expect((first ?? second)!.email).toBe("a@x.co");
-        expect(await repos.loginTokens.consume("h2", now)).toBeNull();
-        expect(await repos.loginTokens.consume("nope", now)).toBeNull();
+        const later = new Date(+now + 60_000);
+        await repos.emailCodes.issue({ email: "a@x.co", purpose: "verify", codeHash: "right", expiresAt: later });
+        expect(await repos.emailCodes.attempt("a@x.co", "verify", "wrong", now, 3)).toBe("wrong");
+        expect(await repos.emailCodes.attempt("a@x.co", "reset", "right", now, 3)).toBe("expired"); // another purpose has no code
+        expect(await repos.emailCodes.attempt("a@x.co", "verify", "right", now, 3)).toBe("ok");
+        expect(await repos.emailCodes.attempt("a@x.co", "verify", "right", now, 3)).toBe("expired"); // used
+
+        await repos.emailCodes.issue({ email: "b@x.co", purpose: "reset", codeHash: "right", expiresAt: later });
+        const guesses = await Promise.all([1, 2, 3, 4, 5].map(() => repos.emailCodes.attempt("b@x.co", "reset", "nope", now, 3)));
+        expect(guesses.filter((g) => g === "wrong")).toHaveLength(3); // parallel guesses can't exceed the limit
+        expect(await repos.emailCodes.attempt("b@x.co", "reset", "right", now, 3)).toBe("locked"); // even the right code, now
+
+        await repos.emailCodes.issue({ email: "b@x.co", purpose: "reset", codeHash: "fresh", expiresAt: later }); // a new code resets the count
+        expect(await repos.emailCodes.attempt("b@x.co", "reset", "fresh", now, 3)).toBe("ok");
+        await repos.emailCodes.issue({ email: "c@x.co", purpose: "verify", codeHash: "x", expiresAt: new Date(+now - 1) });
+        expect(await repos.emailCodes.attempt("c@x.co", "verify", "x", now, 3)).toBe("expired");
       });
 
       it("sessions are found until they expire, and can be deleted", async () => {
@@ -286,6 +305,11 @@ export function repoContract(name: string, makeRepos: () => Promise<Repos>) {
         expect(await repos.sessions.find("s2", now)).toBeNull();
         await repos.sessions.delete("s1");
         expect(await repos.sessions.find("s1", now)).toBeNull();
+        for (const id of ["a", "b", "c"]) await repos.sessions.create({ idHash: id, userId: "u2", expiresAt: new Date(+now + 60_000) });
+        await repos.sessions.deleteByUser("u2", "b");
+        expect(await repos.sessions.find("a", now)).toBeNull();
+        expect(await repos.sessions.find("b", now)).not.toBeNull(); // the one kept
+        expect(await repos.sessions.find("c", now)).toBeNull();
       });
 
       it("purging a business removes its memberships", async () => {

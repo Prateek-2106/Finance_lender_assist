@@ -29,19 +29,33 @@ function itemsTable(e: Pick<Estimate, "lineItems" | "taxRateBps">) {
   return { html, text, totals: t };
 }
 
+const platformWrap = (body: string) =>
+  `<div style="font-family:Segoe UI,Arial,sans-serif;color:#12343b;max-width:560px;line-height:1.5">` +
+  `<p style="font-size:18px;font-weight:700;margin:0 0 16px">Vendor Street</p>${body}` +
+  `<p style="color:#4f6468;font-size:12px;margin-top:24px">Sent by Vendor Street.</p></div>`;
+const codeBlock = (code: string) =>
+  `<p style="font-size:28px;font-weight:700;letter-spacing:6px;font-family:Consolas,Menlo,monospace;margin:4px 0 16px">${code}</p>`;
+
 export const templates = {
-  signInLink(link: string, minutes: number): Rendered {
-    const lines = [
-      "Here is your link to sign in to Vendor Street.",
-      `It works once and expires in ${minutes} minutes.`,
-      "If you didn't ask to sign in, you can ignore this email; nothing changes without the link.",
-    ];
-    const button = `<p style="margin:0 0 16px"><a href="${esc(link)}" style="display:inline-block;background:#0f6e6a;color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none;font-weight:600">Sign in</a></p>`;
+  verifyCode(code: string, minutes: number): Rendered {
+    const lines = ["Enter this code to confirm your email and finish creating your Vendor Street account:", `It expires in ${minutes} minutes.`, "If you didn't sign up, you can ignore this email."];
     return {
-      subject: "Your Vendor Street sign-in link",
-      text: [lines[0], link, lines[1], lines[2]].join("\n\n"),
-      html: wrap("Vendor Street", p(lines[0]!) + button + p(lines[1]!) + p(lines[2]!)).replace("Sent by Vendor Street on behalf of Vendor Street.", "Sent by Vendor Street."),
+      subject: `${code} is your Vendor Street code`,
+      text: [lines[0], code, lines[1], lines[2]].join("\n\n"),
+      html: platformWrap(p(lines[0]!) + codeBlock(code) + p(lines[1]!) + p(lines[2]!)),
     };
+  },
+  resetCode(code: string, minutes: number): Rendered {
+    const lines = ["Enter this code to choose a new password for your Vendor Street account:", `It expires in ${minutes} minutes. Setting a new password signs you out on every other device.`, "If you didn't ask for this, ignore this email; your password stays the same."];
+    return {
+      subject: `${code} is your Vendor Street password reset code`,
+      text: [lines[0], code, lines[1], lines[2]].join("\n\n"),
+      html: platformWrap(p(lines[0]!) + codeBlock(code) + p(lines[1]!) + p(lines[2]!)),
+    };
+  },
+  accountExists(signInUrl: string, forgotUrl: string): Rendered {
+    const lines = ["Someone tried to create a Vendor Street account with this email, but you already have one.", `Sign in: ${signInUrl}`, `Forgot your password, or never set one? Reset it: ${forgotUrl}`, "If this wasn't you, you can ignore this email; nothing changed."];
+    return { subject: "You already have a Vendor Street account", text: lines.join("\n\n"), html: platformWrap(lines.map(p).join("")) };
   },
   leadReceivedCustomer(t: Tenant, lead: Lead): Rendered {
     const lines = [`Hi ${lead.name},`, `Thanks for reaching out. ${t.name} got your request and will get back to you with a quote soon.`, `Your request: "${lead.message}"`];

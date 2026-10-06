@@ -200,11 +200,13 @@ export interface BankTransaction {
 
 // ── Accounts ────────────────────────────────────────────────
 
-/** A person who signs in with their email. Owns or works at one or more businesses. */
+/** A person who signs in with email and password. Owns or works at one or more businesses. */
 export interface User {
   id: Id;
-  email: string; // lower-case, verified by the sign-in link itself
+  email: string; // lower-case
   name?: string;
+  passwordHash?: string; // scrypt, salted; absent until a password is set
+  emailVerifiedAt?: Date; // set once they enter the code we emailed
   createdAt: Date;
   lastLoginAt?: Date;
 }
@@ -217,11 +219,14 @@ export interface Membership {
   createdAt: Date;
 }
 
-/** A one-time sign-in link. Only a hash of the token is stored. */
-export interface LoginToken {
-  tokenHash: string;
+/** A 6-digit code we emailed: to confirm an address, or to reset a password. Only a hash is stored. */
+export type CodePurpose = "verify" | "reset";
+export interface EmailCode {
   email: string;
+  purpose: CodePurpose;
+  codeHash: string;
   expiresAt: Date;
+  attempts: number; // wrong guesses so far; a few and the code stops working
   usedAt?: Date;
   createdAt: Date;
 }

@@ -257,3 +257,7 @@ a.button.secondary { background: transparent; color: var(--action); }
 .addr { display: flex; align-items: center; gap: 0.35rem; }
 .addr input { flex: 1; min-width: 0; }
 code.key { display: block; word-break: break-all; background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius); padding: 0.5rem 0.6rem; font-size: var(--step--1); }
+.pw { display: flex; gap: 0.4rem; align-items: center; }
+.pw input { flex: 1; min-width: 0; }
+.code-input { font-size: var(--step-2); letter-spacing: 0.4em; font-variant-numeric: tabular-nums; max-width: 12rem; }
+.field { display: grid; gap: 0.25rem; } .field > label { font-weight: 500; }

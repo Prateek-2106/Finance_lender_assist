@@ -8,7 +8,8 @@ import type { Session, User } from "../domain";
 
 export const SESSION_COOKIE = "vs_session";
 export const SESSION_DAYS = 30;
-export const LOGIN_TOKEN_MINUTES = 15;
+export const CODE_MINUTES = 15;
+export const MAX_CODE_ATTEMPTS = 5;
 
 export const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 export const randomToken = () => randomBytes(32).toString("base64url");

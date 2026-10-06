@@ -65,23 +65,22 @@ export class Notifier {
     return job;
   }
 
-  /** Platform email, not on behalf of a business: logged under "platform". */
-  signInLink(to: string, link: string, minutes: number) {
+  /** Platform email (codes, account notices), not on behalf of a business: logged under "platform". */
+  platformEmail(to: string, template: string, r: Rendered) {
     const job = (async () => {
-      const r = templates.signInLink(link, minutes);
       if (!this.mailer) {
-        await this.repos.messages.create({ tenantId: "platform", template: "sign_in_link", subject: r.subject, to, status: "skipped", error: "email is turned off (MAIL_TRANSPORT=none)" });
-        // Local development without a mail server: print the link so you can still sign in. Never in production.
-        if (!this.config.production) console.log(`[email] sign-in link for ${to}: ${link}`);
+        await this.repos.messages.create({ tenantId: "platform", template, subject: r.subject, to, status: "skipped", error: "email is turned off (MAIL_TRANSPORT=none)" });
+        // Local development without a mail server: print it so you can still sign up. Never in production.
+        if (!this.config.production) console.log(`[email] ${template} for ${to}: ${r.subject}`);
         return;
       }
-      const msg = await this.repos.messages.create({ tenantId: "platform", template: "sign_in_link", subject: r.subject, to, status: "queued" });
+      const msg = await this.repos.messages.create({ tenantId: "platform", template, subject: r.subject, to, status: "queued" });
       try {
         await this.mailer.send({ to, subject: r.subject, text: r.text, html: r.html });
         await this.repos.messages.setStatus(msg.id, "sent", { sentAt: new Date() });
       } catch (e) {
         await this.repos.messages.setStatus(msg.id, "failed", { error: (e as Error).message.slice(0, 300) });
-        console.warn(`[email] sign-in link to ${to} failed: ${(e as Error).message}`);
+        console.warn(`[email] ${template} to ${to} failed: ${(e as Error).message}`);
       }
     })();
     this.pending.add(job);

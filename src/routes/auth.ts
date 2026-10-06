@@ -1,18 +1,21 @@
-// Accounts: sign in with a link sent by email, see your businesses, create one.
+// Accounts: email + password, with 6-digit codes by email to confirm the address and to reset a password.
 import { Router, type RequestHandler } from "express";
 import { z } from "zod";
 import type { Deps } from "../deps";
+import type { CodePurpose, User } from "../domain";
 import { ConflictError, ForbiddenError, TooManyRequestsError, UnauthorizedError, ValidationError } from "../errors";
 import { generateApiKey, hashApiKey } from "../lib/apiKey";
 import { rateLimit } from "../lib/rateLimit";
 import { tenantUrl, type Notifier } from "../notify/notifier";
+import { templates } from "../notify/templates";
 import { parseOrThrow, TenantCreateSchema } from "../schemas";
+import { burnPasswordCheck, hashPassword, newCode, passwordProblem, verifyPassword } from "../auth/password";
 import {
   apexUrl,
   clearSessionCookie,
+  CODE_MINUTES,
   currentUser,
-  LOGIN_TOKEN_MINUTES,
-  randomToken,
+  MAX_CODE_ATTEMPTS,
   readCookie,
   SESSION_COOKIE,
   sameOrigin,
@@ -20,77 +23,149 @@ import {
   sha256,
   startSession,
 } from "../auth/session";
+import type { Request, Response } from "express";
 
 export const MAX_BUSINESSES_PER_USER = 3;
-const SIGN_INS_PER_EMAIL_PER_HOUR = 5;
+const EMAILS_PER_ADDRESS_PER_HOUR = 5; // codes and notices sent to one address
+const FAILED_LOGINS_PER_ACCOUNT_PER_HOUR = 10;
 
-const StartSchema = z.object({ email: z.email().trim().toLowerCase().max(254), next: z.string().max(500).optional() });
-const VerifySchema = z.object({ token: z.string().min(20).max(100) });
+const Email = z.email().trim().toLowerCase().max(254);
+const Password = z.string().min(1).max(200);
+const Code = z.string().trim().regex(/^\d{6}$/, "Enter the 6-digit code from the email");
 
 export function authRouter(deps: Deps, notifier: Notifier) {
   const { repos, config } = deps;
   const r = Router();
-
-  /** Only send people back to the platform or one of its business subdomains, never elsewhere. */
-  const safeNext = (next: string | undefined) => {
-    if (!next) return undefined;
-    try {
-      const u = new URL(next, apexUrl(config));
-      const base = config.baseDomain === "localhost" ? "lvh.me" : config.baseDomain;
-      const host = u.hostname.toLowerCase();
-      return host === base || host.endsWith(`.${base}`) ? u.toString() : undefined;
-    } catch {
-      return undefined;
-    }
-  };
+  const hour = () => new Date().toISOString().slice(0, 13);
+  const codeHash = (purpose: CodePurpose, email: string, code: string) => sha256(`${purpose}:${email}:${code}`);
 
   const ipLimit: RequestHandler = config.rateLimits
-    ? rateLimit({ name: "sign-in", max: config.rateLimits.signInsPerHour ?? 10, windowMs: 3_600_000, message: "Too many sign-in emails from your network. Try again in an hour." })
+    ? rateLimit({ name: "sign-in", max: config.rateLimits.signInsPerHour ?? 20, windowMs: 3_600_000, message: "Too many attempts from your network. Try again in an hour." })
     : (_req, _res, next) => next();
 
+  /** Caps how much email one address can be sent, whoever is asking. */
+  async function throttleEmails(email: string) {
+    if ((await repos.usage.increment(`emails:${sha256(email)}:${hour()}`)) > EMAILS_PER_ADDRESS_PER_HOUR)
+      throw new TooManyRequestsError("We've emailed this address several times already. Check your inbox (and spam), or try again in an hour.", 3600);
+  }
+  async function sendCode(email: string, purpose: CodePurpose) {
+    const code = newCode();
+    await repos.emailCodes.issue({ email, purpose, codeHash: codeHash(purpose, email, code), expiresAt: new Date(Date.now() + CODE_MINUTES * 60_000) });
+    const tpl = purpose === "verify" ? templates.verifyCode(code, CODE_MINUTES) : templates.resetCode(code, CODE_MINUTES);
+    void notifier.platformEmail(email, purpose === "verify" ? "verify_code" : "reset_code", tpl);
+  }
+  async function checkCode(email: string, purpose: CodePurpose, code: string) {
+    const result = await repos.emailCodes.attempt(email, purpose, codeHash(purpose, email, code), new Date(), MAX_CODE_ATTEMPTS);
+    if (result === "wrong") throw new ValidationError("That code isn't right. Check the latest email we sent.");
+    if (result === "locked") throw new TooManyRequestsError("Too many wrong codes. Ask for a new one.");
+    if (result === "expired") throw new ValidationError("That code has expired or was already used. Ask for a new one.");
+  }
+  /** Signs this browser in: a fresh session id every time (never reuse one from before sign-in). */
+  async function signIn(req: Request, res: Response, user: User) {
+    const old = readCookie(req, SESSION_COOKIE);
+    if (old) await repos.sessions.delete(sha256(old));
+    await repos.users.update(user.id, { lastLoginAt: new Date() });
+    const id = await startSession(repos, user.id);
+    setSessionCookie(res, config, id);
+    return id;
+  }
+  const publicUser = (u: User) => ({ id: u.id, email: u.email, name: u.name ?? null });
   const businessesOf = async (userId: string) => {
-    const ms = await repos.memberships.listByUser(userId);
     const out = [];
-    for (const m of ms) {
+    for (const m of await repos.memberships.listByUser(userId)) {
       const t = await repos.tenants.findById(m.tenantId);
       if (t && !t.demo) out.push({ id: t.id, name: t.name, subdomain: t.subdomain, role: m.role, dashboardUrl: tenantUrl(config, t, "/app"), siteUrl: tenantUrl(config, t, "/") });
     }
     return out;
   };
 
-  // 1. "Email me a link". Always answers the same way, so it can't be used to find out who has an account.
-  r.post("/start", ipLimit, async (req, res) => {
-    const { email, next } = parseOrThrow(StartSchema, req.body);
-    const hour = new Date().toISOString().slice(0, 13);
-    if ((await repos.usage.increment(`signin:${sha256(email)}:${hour}`)) > SIGN_INS_PER_EMAIL_PER_HOUR)
-      throw new TooManyRequestsError("We've sent several links to this address already. Check your inbox, or try again in an hour.", 3600);
-    const token = randomToken();
-    await repos.loginTokens.create({ tokenHash: sha256(token), email, expiresAt: new Date(Date.now() + LOGIN_TOKEN_MINUTES * 60_000) });
-    // The token sits after "#", which browsers never send to a server, so it can't end up in access logs.
-    const params = new URLSearchParams({ token, ...(safeNext(next) ? { next: safeNext(next)! } : {}) });
-    const link = `${apexUrl(config)}/auth/verify#${params}`;
-    void notifier.signInLink(email, link, LOGIN_TOKEN_MINUTES);
-    res.status(202).json({ sent: true, expiresInMinutes: LOGIN_TOKEN_MINUTES });
+  // ── Create an account. The answer is the same whether or not the email is already registered.
+  r.post("/signup", ipLimit, async (req, res) => {
+    const { email, password } = parseOrThrow(z.object({ email: Email, password: Password }), req.body);
+    const problem = passwordProblem(password, email);
+    if (problem) throw new ValidationError(problem, [{ path: "password", message: problem }]);
+    await throttleEmails(email);
+    const existing = await repos.users.findByEmail(email);
+    if (existing?.emailVerifiedAt) {
+      // Never let a sign-up change a confirmed account's password: tell the real owner instead.
+      void notifier.platformEmail(email, "account_exists", templates.accountExists(`${apexUrl(config)}/signin`, `${apexUrl(config)}/forgot`));
+    } else {
+      const { user } = await repos.users.upsertByEmail(email);
+      await repos.users.update(user.id, { passwordHash: await hashPassword(password) });
+      await sendCode(email, "verify");
+    }
+    res.status(202).json({ next: "verify", email, expiresInMinutes: CODE_MINUTES });
   });
 
-  // 2. The link's page posts the token here. One use, 15 minutes; then a 30-day session cookie.
-  r.post("/verify", async (req, res) => {
-    const { token } = parseOrThrow(VerifySchema, req.body);
-    const t = await repos.loginTokens.consume(sha256(token), new Date());
-    if (!t) throw new UnauthorizedError("This sign-in link has expired or was already used. Ask for a new one.");
-    const { user, created } = await repos.users.upsertByEmail(t.email);
-    await repos.users.update(user.id, { lastLoginAt: new Date() });
-    const old = readCookie(req, SESSION_COOKIE);
-    if (old) await repos.sessions.delete(sha256(old)); // never reuse a session id from before sign-in
-    setSessionCookie(res, config, await startSession(repos, user.id));
-    res.json({ user: { id: user.id, email: user.email, name: user.name ?? null }, newUser: created, businesses: await businessesOf(user.id) });
+  r.post("/verify-email", ipLimit, async (req, res) => {
+    const { email, code } = parseOrThrow(z.object({ email: Email, code: Code }), req.body);
+    await checkCode(email, "verify", code);
+    const user = await repos.users.findByEmail(email);
+    if (!user) throw new ValidationError("That code has expired or was already used. Ask for a new one.");
+    const verified = await repos.users.update(user.id, { emailVerifiedAt: user.emailVerifiedAt ?? new Date() });
+    await signIn(req, res, verified);
+    res.json({ user: publicUser(verified), businesses: await businessesOf(verified.id) });
+  });
+
+  r.post("/resend-code", ipLimit, async (req, res) => {
+    const { email } = parseOrThrow(z.object({ email: Email }), req.body);
+    await throttleEmails(email);
+    const user = await repos.users.findByEmail(email);
+    if (user && !user.emailVerifiedAt) await sendCode(email, "verify");
+    res.status(202).json({ sent: true });
+  });
+
+  // ── Sign in. Every failure reads the same and takes the same time, so it can't reveal who has an account.
+  r.post("/login", ipLimit, async (req, res) => {
+    const { email, password } = parseOrThrow(z.object({ email: Email, password: Password }), req.body);
+    const user = await repos.users.findByEmail(email);
+    const wrong = () => new UnauthorizedError("Email or password is incorrect");
+    if (!user?.passwordHash) {
+      await burnPasswordCheck(password);
+      throw wrong();
+    }
+    const failKey = `loginfail:${user.id}:${hour()}`;
+    if ((await repos.usage.peek(failKey)) >= FAILED_LOGINS_PER_ACCOUNT_PER_HOUR)
+      throw new TooManyRequestsError("Too many failed sign-ins for this account. Try again in an hour, or reset your password.", 3600);
+    if (!(await verifyPassword(password, user.passwordHash))) {
+      await repos.usage.increment(failKey);
+      throw wrong();
+    }
+    if (!user.emailVerifiedAt) {
+      await throttleEmails(email);
+      await sendCode(email, "verify");
+      res.status(403).json({ error: "Confirm your email first. We just sent you a new code.", needsVerification: true });
+      return;
+    }
+    await signIn(req, res, user);
+    res.json({ user: publicUser(user), businesses: await businessesOf(user.id) });
+  });
+
+  // ── Forgot password: a code by email, then a new password (which also confirms the email).
+  r.post("/forgot", ipLimit, async (req, res) => {
+    const { email } = parseOrThrow(z.object({ email: Email }), req.body);
+    await throttleEmails(email);
+    if (await repos.users.findByEmail(email)) await sendCode(email, "reset");
+    res.status(202).json({ sent: true, expiresInMinutes: CODE_MINUTES });
+  });
+
+  r.post("/reset", ipLimit, async (req, res) => {
+    const { email, code, password } = parseOrThrow(z.object({ email: Email, code: Code, password: Password }), req.body);
+    const problem = passwordProblem(password, email);
+    if (problem) throw new ValidationError(problem, [{ path: "password", message: problem }]);
+    await checkCode(email, "reset", code);
+    const user = await repos.users.findByEmail(email);
+    if (!user) throw new ValidationError("That code has expired or was already used. Ask for a new one.");
+    const updated = await repos.users.update(user.id, { passwordHash: await hashPassword(password), emailVerifiedAt: user.emailVerifiedAt ?? new Date() });
+    await repos.sessions.deleteByUser(user.id); // a reset signs out every other device
+    await signIn(req, res, updated);
+    res.json({ user: publicUser(updated), businesses: await businessesOf(updated.id) });
   });
 
   r.get("/me", async (req, res) => {
     const auth = await currentUser(repos, req, res);
     if (!auth) throw new UnauthorizedError("Not signed in");
-    const u = auth.user;
-    res.json({ user: { id: u.id, email: u.email, name: u.name ?? null }, businesses: await businessesOf(u.id), limits: { businesses: MAX_BUSINESSES_PER_USER } });
+    res.json({ user: publicUser(auth.user), businesses: await businessesOf(auth.user.id), limits: { businesses: MAX_BUSINESSES_PER_USER } });
   });
 
   r.post("/logout", async (req, res) => {
@@ -100,7 +175,7 @@ export function authRouter(deps: Deps, notifier: Notifier) {
     res.status(204).end();
   });
 
-  // 3. A signed-in, verified email can start a real business.
+  // ── A signed-in, confirmed account can start a real business.
   r.post("/businesses", async (req, res) => {
     const auth = await currentUser(repos, req, res);
     if (!auth) throw new UnauthorizedError("Sign in to create a business");

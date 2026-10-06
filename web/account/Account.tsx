@@ -1,5 +1,5 @@
 // Accounts: sign in by email, the page the link opens, and "your businesses".
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { api, ApiError } from "../api";
 import { ErrorText } from "../ui/bits";
 
@@ -28,80 +28,177 @@ function Frame({ children, title }: { children: React.ReactNode; title: string }
   );
 }
 
-export function SignInPage() {
-  const next = new URLSearchParams(location.search).get("next") ?? undefined;
-  const [sentTo, setSentTo] = useState<string | null>(null);
+const nextParam = () => {
+  const n = new URLSearchParams(location.search).get("next");
+  return n ? `next=${encodeURIComponent(n)}` : "";
+};
+const withNext = (path: string, extra = "") => {
+  const q = [extra, nextParam()].filter(Boolean).join("&");
+  return q ? `${path}?${q}` : path;
+};
+const goNext = () => location.replace(new URLSearchParams(location.search).get("next") ?? "/account");
+
+function PasswordField({ name = "password", label = "Password", autoComplete, help }: { name?: string; label?: string; autoComplete: string; help?: string }) {
+  const [show, setShow] = useState(false);
+  const id = useId();
+  return (
+    <div className="field">
+      <label htmlFor={id}>{label}</label>
+      <span className="pw">
+        <input id={id} name={name} type={show ? "text" : "password"} required minLength={10} maxLength={200} autoComplete={autoComplete} aria-describedby={help ? `${id}-help` : undefined} />
+        <button type="button" className="secondary small" onClick={() => setShow((x) => !x)} aria-label={show ? "Hide password" : "Show password"}>{show ? "Hide" : "Show"}</button>
+      </span>
+      {help && <span id={`${id}-help`} className="small quiet">{help}</span>}
+    </div>
+  );
+}
+
+function useSubmit<T>(fn: (f: FormData) => Promise<T>) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
-  async function submit(e: React.FormEvent<HTMLFormElement>) {
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const email = String(new FormData(e.currentTarget).get("email") ?? "").trim();
     setBusy(true);
     setError(null);
     try {
-      await api("/auth/start", { method: "POST", json: { email, ...(next ? { next } : {}) } });
-      setSentTo(email);
+      await fn(new FormData(e.currentTarget));
     } catch (err) {
       setError(err);
     } finally {
       setBusy(false);
     }
   }
-  if (sentTo)
-    return (
-      <Frame title="Check your email">
-        <p role="status">
-          We sent a sign-in link to <strong>{sentTo}</strong>. It works once and expires in 15 minutes.
-        </p>
-        <p className="quiet small">Nothing there? Check spam, or <button className="linkish" onClick={() => setSentTo(null)}>send another</button>.</p>
-      </Frame>
-    );
+  return { busy, error, setError, onSubmit };
+}
+
+export function SignInPage() {
+  const { busy, error, onSubmit } = useSubmit(async (f) => {
+    const email = String(f.get("email")).trim();
+    try {
+      await api("/auth/login", { method: "POST", json: { email, password: String(f.get("password")) } });
+      goNext();
+    } catch (err) {
+      // Right password but the email isn't confirmed yet: we just sent a code
+      if (err instanceof ApiError && err.status === 403 && /Confirm your email/.test(err.message)) location.assign(withNext("/verify", `email=${encodeURIComponent(email)}`));
+      else throw err;
+    }
+  });
   return (
     <Frame title="Sign in">
-      <p className="quiet">No password: we email you a link. New here? The same link creates your account.</p>
-      <form className="stack" onSubmit={submit} aria-label="Sign in">
+      <form className="stack" onSubmit={onSubmit} aria-label="Sign in">
         <label>
           Email
-          <input name="email" type="email" required autoComplete="email" autoFocus placeholder="you@yourbusiness.com" />
+          <input name="email" type="email" required autoComplete="username" autoFocus />
         </label>
+        <PasswordField autoComplete="current-password" />
         <ErrorText error={error} />
-        <div>
-          <button disabled={busy}>{busy ? "Sending…" : "Email me a link"}</button>
+        <div className="row" style={{ justifyContent: "space-between" }}>
+          <button disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
+          <a href={withNext("/forgot")} className="small">Forgot password?</a>
         </div>
       </form>
-      <p className="small quiet">Just looking? <a href="/">Try a demo business</a> instead; no account needed.</p>
+      <p className="small">New to Vendor Street? <a href={withNext("/signup")}>Create an account</a></p>
+      <p className="small quiet">Just looking? <a href="/">Try a demo business</a>; no account needed.</p>
     </Frame>
   );
 }
 
-let verifyStarted = false; // the token works once: never post it twice (React may run effects twice in development)
-
-/** Opened from the email. The token is in the #fragment, so it never reaches a server log; we post it once. */
-export function VerifyPage() {
-  const [error, setError] = useState<unknown>(null);
-  useEffect(() => {
-    if (verifyStarted) return;
-    verifyStarted = true;
-    const params = new URLSearchParams(location.hash.slice(1));
-    const token = params.get("token");
-    const next = params.get("next");
-    history.replaceState(null, "", location.pathname); // don't leave the token in the address bar or history
-    if (!token) return setError(new ApiError("This link is incomplete. Ask for a new one.", 400));
-    api("/auth/verify", { method: "POST", json: { token } }).then(
-      () => location.replace(next ?? "/account"),
-      setError,
-    );
-  }, []);
+export function SignUpPage() {
+  const { busy, error, onSubmit } = useSubmit(async (f) => {
+    const email = String(f.get("email")).trim();
+    await api("/auth/signup", { method: "POST", json: { email, password: String(f.get("password")) } });
+    location.assign(withNext("/verify", `email=${encodeURIComponent(email)}`));
+  });
   return (
-    <Frame title={error ? "That link didn't work" : "Signing you in…"}>
-      {error ? (
-        <>
-          <ErrorText error={error} />
-          <p><a className="button" href="/signin">Send a new link</a></p>
-        </>
-      ) : (
-        <p className="quiet" role="status">One moment.</p>
-      )}
+    <Frame title="Create an account">
+      <form className="stack" onSubmit={onSubmit} aria-label="Create an account">
+        <label>
+          Email
+          <input name="email" type="email" required autoComplete="email" autoFocus />
+        </label>
+        <PasswordField autoComplete="new-password" help="At least 10 characters. A short phrase is easy to remember and hard to guess." />
+        <ErrorText error={error} />
+        <div><button disabled={busy}>{busy ? "Creating…" : "Create account"}</button></div>
+      </form>
+      <p className="small">Already have an account? <a href={withNext("/signin")}>Sign in</a></p>
+    </Frame>
+  );
+}
+
+/** "Enter the code we emailed you" after sign-up (or a sign-in before confirming). */
+export function VerifyPage() {
+  const email = new URLSearchParams(location.search).get("email") ?? "";
+  const [resent, setResent] = useState(false);
+  const { busy, error, setError, onSubmit } = useSubmit(async (f) => {
+    await api("/auth/verify-email", { method: "POST", json: { email, code: String(f.get("code")).trim() } });
+    goNext();
+  });
+  async function resend() {
+    setError(null);
+    try {
+      await api("/auth/resend-code", { method: "POST", json: { email } });
+      setResent(true);
+    } catch (err) {
+      setError(err);
+    }
+  }
+  if (!email) return <Frame title="Confirm your email"><p><a href="/signup">Start again</a></p></Frame>;
+  return (
+    <Frame title="Confirm your email">
+      <p>We sent a 6-digit code to <strong>{email}</strong>. It expires in 15 minutes.</p>
+      <form className="stack" onSubmit={onSubmit} aria-label="Confirm your email">
+        <label>
+          Code
+          <input name="code" required inputMode="numeric" autoComplete="one-time-code" pattern="\d{6}" maxLength={6} autoFocus className="code-input" />
+        </label>
+        <ErrorText error={error} />
+        <div><button disabled={busy}>{busy ? "Checking…" : "Confirm"}</button></div>
+      </form>
+      <p className="small quiet">
+        Nothing there? Check spam, or <button className="linkish" onClick={resend}>send a new code</button>.{resent && <span role="status"> Sent.</span>}
+      </p>
+    </Frame>
+  );
+}
+
+export function ForgotPage() {
+  const [email, setEmail] = useState<string | null>(null);
+  const ask = useSubmit(async (f) => {
+    const e = String(f.get("email")).trim();
+    await api("/auth/forgot", { method: "POST", json: { email: e } });
+    setEmail(e);
+  });
+  const reset = useSubmit(async (f) => {
+    await api("/auth/reset", { method: "POST", json: { email, code: String(f.get("code")).trim(), password: String(f.get("password")) } });
+    goNext();
+  });
+  if (!email)
+    return (
+      <Frame title="Reset your password">
+        <p className="quiet">We'll email you a code to choose a new password.</p>
+        <form className="stack" onSubmit={ask.onSubmit} aria-label="Reset your password">
+          <label>
+            Email
+            <input name="email" type="email" required autoComplete="username" autoFocus />
+          </label>
+          <ErrorText error={ask.error} />
+          <div><button disabled={ask.busy}>{ask.busy ? "Sending…" : "Email me a code"}</button></div>
+        </form>
+        <p className="small"><a href={withNext("/signin")}>Back to sign in</a></p>
+      </Frame>
+    );
+  return (
+    <Frame title="Choose a new password">
+      <p>If <strong>{email}</strong> has an account, a 6-digit code is on its way. It expires in 15 minutes.</p>
+      <form className="stack" onSubmit={reset.onSubmit} aria-label="Choose a new password">
+        <label>
+          Code
+          <input name="code" required inputMode="numeric" autoComplete="one-time-code" pattern="\d{6}" maxLength={6} autoFocus className="code-input" />
+        </label>
+        <PasswordField label="New password" autoComplete="new-password" help="At least 10 characters. This signs you out on your other devices." />
+        <ErrorText error={reset.error} />
+        <div><button disabled={reset.busy}>{reset.busy ? "Saving…" : "Save and sign in"}</button></div>
+      </form>
     </Frame>
   );
 }

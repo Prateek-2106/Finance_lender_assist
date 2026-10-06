@@ -1,6 +1,6 @@
 // The contract every storage backend must satisfy.
 // Implemented by repos/memory.ts (tests, local dev) and repos/mongo.ts.
-import type { BankTransaction, Contact, Customer, LoginToken, Membership, Session, User, Estimate, FundingApplication, FundingDecision, Id, Invoice, Lead, Message, MessageStatus, Tenant, TxnCategory } from "../domain";
+import type { BankTransaction, CodePurpose, Contact, Customer, Membership, Session, User, Estimate, FundingApplication, FundingDecision, Id, Invoice, Lead, Message, MessageStatus, Tenant, TxnCategory } from "../domain";
 
 export type NewTenant = Omit<Tenant, "id" | "createdAt">;
 /** `createdAt` may be set explicitly only to seed history (demo businesses); normal code lets the repo stamp it. */
@@ -91,13 +91,16 @@ export interface MessageRepo {
 export interface UsageRepo {
   /** Atomically adds 1 to a named counter and returns the new value (e.g. "ai:2026-10-04"). */
   increment(key: string): Promise<number>;
+  /** The current value without changing it (0 if never counted). */
+  peek(key: string): Promise<number>;
 }
 
 export interface UserRepo {
   /** Finds the user with this email (case-insensitive) or creates one. */
   upsertByEmail(email: string): Promise<{ user: User; created: boolean }>;
   findById(id: Id): Promise<User | null>;
-  update(id: Id, patch: Partial<Pick<User, "name" | "lastLoginAt">>): Promise<User>;
+  findByEmail(email: string): Promise<User | null>;
+  update(id: Id, patch: Partial<Pick<User, "name" | "lastLoginAt" | "passwordHash" | "emailVerifiedAt">>): Promise<User>;
 }
 
 export interface MembershipRepo {
@@ -107,10 +110,15 @@ export interface MembershipRepo {
   listByUser(userId: Id): Promise<Membership[]>;
 }
 
-export interface LoginTokenRepo {
-  create(input: Omit<LoginToken, "createdAt" | "usedAt">): Promise<void>;
-  /** Marks the token used and returns it, atomically, only if it is unused and unexpired. */
-  consume(tokenHash: string, now: Date): Promise<LoginToken | null>;
+export type CodeCheck = "ok" | "wrong" | "expired" | "locked";
+export interface EmailCodeRepo {
+  /** Stores a new code for this address and purpose, replacing any earlier one. */
+  issue(input: { email: string; purpose: CodePurpose; codeHash: string; expiresAt: Date }): Promise<void>;
+  /**
+   * One guess. Counts the attempt first (atomically), so guesses can't race past the limit;
+   * "ok" also marks the code used, so it works exactly once.
+   */
+  attempt(email: string, purpose: CodePurpose, codeHash: string, now: Date, maxAttempts: number): Promise<CodeCheck>;
 }
 
 export interface SessionRepo {
@@ -118,6 +126,8 @@ export interface SessionRepo {
   /** The session if it exists and hasn't expired. */
   find(idHash: string, now: Date): Promise<Session | null>;
   delete(idHash: string): Promise<void>;
+  /** Signs a user out everywhere (after a password reset), optionally keeping one session. */
+  deleteByUser(userId: Id, exceptIdHash?: string): Promise<void>;
 }
 
 export interface Repos {
@@ -132,7 +142,7 @@ export interface Repos {
   usage: UsageRepo;
   users: UserRepo;
   memberships: MembershipRepo;
-  loginTokens: LoginTokenRepo;
+  emailCodes: EmailCodeRepo;
   sessions: SessionRepo;
   /** Deletes a business and everything it owns (demo cleanup). */
   purgeTenant(tenantId: Id): Promise<void>;

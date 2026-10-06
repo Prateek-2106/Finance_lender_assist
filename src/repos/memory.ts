@@ -1,6 +1,6 @@
 // Reference implementation of the Repos contract, used by most tests.
 import { randomUUID } from "node:crypto";
-import type { BankTransaction, Customer, Estimate, LoginToken, Membership, Session, User, FundingApplication, Id, Invoice, Lead, Message, Tenant } from "../domain";
+import type { BankTransaction, Customer, EmailCode, Estimate, Membership, Session, User, FundingApplication, Id, Invoice, Lead, Message, Tenant } from "../domain";
 import { ConflictError, NotFoundError } from "../errors";
 import type { Repos } from "./types";
 
@@ -19,7 +19,7 @@ export function createMemoryRepos(): Repos {
   const usage = new Map<string, number>();
   const users = new Map<Id, User>();
   const memberships: Membership[] = [];
-  const loginTokens = new Map<string, LoginToken>();
+  const emailCodes = new Map<string, EmailCode>();
   const sessions = new Map<string, Session>();
 
   const hostTaken = (hostname: string | undefined, exceptId?: Id) =>
@@ -247,6 +247,9 @@ export function createMemoryRepos(): Repos {
         usage.set(key, n);
         return n;
       },
+      async peek(key) {
+        return usage.get(key) ?? 0;
+      },
     },
     users: {
       async upsertByEmail(raw) {
@@ -259,6 +262,11 @@ export function createMemoryRepos(): Repos {
       },
       async findById(id) {
         const u = users.get(id);
+        return u ? clone(u) : null;
+      },
+      async findByEmail(raw) {
+        const email = raw.trim().toLowerCase();
+        const u = [...users.values()].find((x) => x.email === email);
         return u ? clone(u) : null;
       },
       async update(id, patch) {
@@ -284,15 +292,18 @@ export function createMemoryRepos(): Repos {
         return memberships.filter((m) => m.userId === userId).map(clone);
       },
     },
-    loginTokens: {
-      async create(input) {
-        loginTokens.set(input.tokenHash, { ...clone(input), createdAt: new Date() });
+    emailCodes: {
+      async issue(input) {
+        emailCodes.set(`${input.purpose}:${input.email}`, { ...clone(input), attempts: 0, createdAt: new Date() });
       },
-      async consume(tokenHash, now) {
-        const t = loginTokens.get(tokenHash);
-        if (!t || t.usedAt || t.expiresAt <= now) return null;
-        t.usedAt = now;
-        return clone(t);
+      async attempt(email, purpose, codeHash, now, max) {
+        const c = emailCodes.get(`${purpose}:${email}`);
+        if (!c || c.usedAt || c.expiresAt <= now) return "expired";
+        if (c.attempts >= max) return "locked";
+        c.attempts++;
+        if (c.codeHash !== codeHash) return "wrong";
+        c.usedAt = now;
+        return "ok";
       },
     },
     sessions: {
@@ -307,6 +318,9 @@ export function createMemoryRepos(): Repos {
       },
       async delete(idHash) {
         sessions.delete(idHash);
+      },
+      async deleteByUser(userId, except) {
+        for (const [k, s] of sessions) if (s.userId === userId && k !== except) sessions.delete(k);
       },
     },
     async purgeTenant(tenantId) {

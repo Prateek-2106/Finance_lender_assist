@@ -267,16 +267,20 @@ Guard rails for a public site, all on by default in production (`NODE_ENV=produc
 
 Locally, everything works the same with sign-up open: `npm run dev`, open `http://localhost:3000`, press **Try it** (demo underwriter key `uw_demo_public_0001`). `RATE_LIMITS=on` turns the limits on locally.
 
-## Accounts: sign in by email
+## Accounts: email and password
 
-Real businesses are created by people with verified emails; demos stay one click away.
+Real businesses are created by people with confirmed emails; demos stay one click away.
 
-- **Sign in** (`/signin`): enter an email and get a one-time link, valid for 15 minutes. There's no password and no separate sign-up: the first link creates the account. The response is the same for every address, so it can't be used to find out who has an account. Links per address (5 an hour) and per visitor (10 an hour) are limited.
-- **The link** (`/auth/verify#token=…`): the token sits after `#`, so browsers never send it to a server or into logs. The page posts it once. Only a SHA-256 of each token and session id is stored, and expired ones are deleted automatically (MongoDB TTL indexes).
-- **The session:** a 30-day `HttpOnly; Secure; SameSite=Lax` cookie on `.vendorstreet.dev`, so one sign-in covers the platform and every business subdomain. Because subdomains count as the same site, every cookie-authenticated change must also carry an `Origin` that matches its own address. A page on another business's subdomain can't act with your cookie.
-- **Your businesses** (`/account`): create up to 3, each with a reserved-name check (platform words, banks and big brands) so nobody can open `chase.vendorstreet.dev`. Notifications go to your email by default.
+- **Sign up** (`/signup`): email and a password of at least 10 characters (common passwords and the email's own name are refused). We email a **6-digit code** (`/verify`) to confirm the address before the account can sign in.
+- **Sign in** (`/signin`): email and password. A wrong email and a wrong password get the same answer and take the same time (a dummy hash is checked for unknown emails), so the form can't reveal who has an account. 10 wrong passwords lock an account for the hour; each network is limited too.
+- **Forgot password** (`/forgot`): a 6-digit code by email, then a new password. That also confirms the email and **signs out every other device**.
+- **Codes:** 15 minutes, single use, stored only as hashes, at most 5 guesses each (counted atomically, so parallel guesses can't sneak past). Each address gets at most 5 emails an hour.
+- **Passwords:** salted **scrypt** (memory-hard, built into Node), stored as `scrypt$N$r$p$salt$hash` so the cost can be raised later; compared in constant time.
+- **Signing up with an email that already has an account** never changes that account. The owner gets a "you already have an account" email instead.
+- **The session:** a 30-day `HttpOnly; Secure; SameSite=Lax` cookie on `.vendorstreet.dev`, so one sign-in covers the platform and every business subdomain. Session ids are random, stored only as hashes, and replaced at every sign-in. Because subdomains count as the same site, every cookie-authenticated change must also carry an `Origin` matching its own address.
+- **Your businesses** (`/account`): create up to 3, with reserved names (platform words, banks and big brands) blocked so nobody can open `chase.vendorstreet.dev`.
 - **API keys still work** for integrations and demos, and a wrong key is refused even if you're signed in.
 
-Locally, sign-in emails land in Mailpit (http://localhost:8025). With `MAIL_TRANSPORT=none`, the link is printed in the server window instead (never in production). Open the app at `http://lvh.me:3000`, not `localhost`, so the cookie covers the business subdomains.
+Locally, emails land in Mailpit (http://localhost:8025). With `MAIL_TRANSPORT=none`, the code is printed in the server window (never in production). Open the app at `http://lvh.me:3000`, not `localhost`, so the cookie covers the business subdomains.
 
 **On the live site, SES starts in sandbox mode:** it only delivers to addresses you've verified in SES. Request production access (SES → Account dashboard) before inviting anyone else to sign in.

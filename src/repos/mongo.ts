@@ -1,5 +1,5 @@
 import { MongoServerError, ObjectId, type Db } from "mongodb";
-import type { BankTransaction, Customer, Estimate, LoginToken, Membership, Session, User, FundingApplication, Invoice, Lead, Message, Tenant } from "../domain";
+import type { BankTransaction, Customer, EmailCode, Estimate, Membership, Session, User, FundingApplication, Invoice, Lead, Message, Tenant } from "../domain";
 import { ConflictError, NotFoundError } from "../errors";
 import type { Repos } from "./types";
 
@@ -41,7 +41,7 @@ export async function createMongoRepos(db: Db): Promise<Repos> {
   const messages = db.collection<Doc<Message>>("messages");
   const users = db.collection<Doc<User>>("users");
   const memberships = db.collection<Membership & { _id: string }>("memberships");
-  const loginTokens = db.collection<Omit<LoginToken, "tokenHash"> & { _id: string }>("login_tokens");
+  const emailCodes = db.collection<EmailCode & { _id: string }>("email_codes");
   const sessions = db.collection<Omit<Session, "idHash"> & { _id: string }>("sessions");
 
   await Promise.all([
@@ -55,8 +55,9 @@ export async function createMongoRepos(db: Db): Promise<Repos> {
     memberships.createIndex({ userId: 1 }),
     // Expired sign-in links and sessions delete themselves (Mongo checks about once a minute;
     // reads also check expiresAt, so nothing expired is ever accepted in between).
-    loginTokens.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
+    emailCodes.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
     sessions.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
+    sessions.createIndex({ userId: 1 }),
     tenants.createIndex({ "demo.expiresAt": 1 }, { partialFilterExpression: { "demo.expiresAt": { $exists: true } } }),
     estimates.createIndex({ tenantId: 1, _id: 1 }),
     estimates.createIndex({ tenantId: 1, leadId: 1, status: 1 }),
@@ -295,6 +296,9 @@ export async function createMongoRepos(db: Db): Promise<Repos> {
       async findById(id) {
         return fromDoc(await users.findOne({ _id: id }));
       },
+      async findByEmail(raw) {
+        return fromDoc(await users.findOne({ email: raw.trim().toLowerCase() }));
+      },
       async update(id, patch) {
         const d = await users.findOneAndUpdate({ _id: id }, toUpdate(patch), { returnDocument: "after" });
         if (!d) throw new NotFoundError("User not found");
@@ -318,19 +322,26 @@ export async function createMongoRepos(db: Db): Promise<Repos> {
         return (await memberships.find({ userId }).sort({ createdAt: 1 }).toArray()).map(({ _id: _omit, ...m }) => m);
       },
     },
-    loginTokens: {
-      async create({ tokenHash, ...rest }) {
-        await loginTokens.insertOne({ _id: tokenHash, ...rest, createdAt: new Date() });
+    emailCodes: {
+      async issue(input) {
+        const _id = `${input.purpose}:${input.email}`;
+        await emailCodes.replaceOne({ _id }, { ...input, attempts: 0, createdAt: new Date() }, { upsert: true });
       },
-      async consume(tokenHash, now) {
-        const d = await loginTokens.findOneAndUpdate(
-          { _id: tokenHash, usedAt: { $exists: false }, expiresAt: { $gt: now } },
-          { $set: { usedAt: now } },
+      async attempt(email, purpose, codeHash, now, max) {
+        const _id = `${purpose}:${email}`;
+        // Count the guess first, and only while under the limit: parallel guesses can't sneak past it.
+        const c = await emailCodes.findOneAndUpdate(
+          { _id, usedAt: { $exists: false }, expiresAt: { $gt: now }, attempts: { $lt: max } },
+          { $inc: { attempts: 1 } },
           { returnDocument: "after" },
         );
-        if (!d) return null;
-        const { _id, ...rest } = d;
-        return { tokenHash: _id, ...rest };
+        if (!c) {
+          const d = await emailCodes.findOne({ _id });
+          return !d || d.usedAt || d.expiresAt <= now ? "expired" : "locked";
+        }
+        if (c.codeHash !== codeHash) return "wrong";
+        const used = await emailCodes.updateOne({ _id, usedAt: { $exists: false } }, { $set: { usedAt: now } });
+        return used.modifiedCount === 1 ? "ok" : "expired";
       },
     },
     sessions: {
@@ -348,6 +359,9 @@ export async function createMongoRepos(db: Db): Promise<Repos> {
       async delete(idHash) {
         await sessions.deleteOne({ _id: idHash });
       },
+      async deleteByUser(userId, except) {
+        await sessions.deleteMany({ userId, ...(except ? { _id: { $ne: except } } : {}) });
+      },
     },
     async purgeTenant(tenantId) {
       // Children first, the tenant last: an interrupted purge leaves a tenant to retry, never orphans.
@@ -360,6 +374,9 @@ export async function createMongoRepos(db: Db): Promise<Repos> {
       async increment(key) {
         const c = await counters.findOneAndUpdate({ _id: `usage:${key}` }, { $inc: { seq: 1 } }, { upsert: true, returnDocument: "after" });
         return c!.seq;
+      },
+      async peek(key) {
+        return (await counters.findOne({ _id: `usage:${key}` }))?.seq ?? 0;
       },
     },
   };
