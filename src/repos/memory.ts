@@ -242,8 +242,8 @@ export function createMemoryRepos(): Repos {
       },
     },
     usage: {
-      async increment(key) {
-        const n = (usage.get(key) ?? 0) + 1;
+      async increment(key, by = 1) {
+        const n = (usage.get(key) ?? 0) + by;
         usage.set(key, n);
         return n;
       },
@@ -321,6 +321,33 @@ export function createMemoryRepos(): Repos {
       },
       async deleteByUser(userId, except) {
         for (const [k, s] of sessions) if (s.userId === userId && k !== except) sessions.delete(k);
+      },
+    },
+    stats: {
+      async overview(since) {
+        const day = (d: Date) => new Date(d).toISOString().slice(0, 10);
+        const tally = <T>(items: T[], when: (x: T) => Date | undefined) => {
+          const out: Record<string, number> = {};
+          for (const x of items) {
+            const w = when(x);
+            if (w && new Date(w) >= since) out[day(w)] = (out[day(w)] ?? 0) + 1;
+          }
+          return out;
+        };
+        const all = [...tenants.values()];
+        const demoIds = new Set(all.filter((t) => t.demo).map((t) => t.id));
+        const real = all.filter((t) => !t.demo);
+        return {
+          users: { total: users.size, confirmed: [...users.values()].filter((u) => u.emailVerifiedAt).length },
+          businesses: { real: real.length, demosLive: demoIds.size },
+          daily: {
+            signups: tally([...users.values()], (u) => u.createdAt),
+            businesses: tally(real, (t) => t.createdAt),
+            leads: tally(leads.filter((l) => !demoIds.has(l.tenantId)), (l) => l.createdAt),
+            emailsSent: tally(messages.filter((m) => m.status === "sent"), (m) => m.createdAt),
+            emailsFailed: tally(messages.filter((m) => m.status === "failed"), (m) => m.createdAt),
+          },
+        };
       },
     },
     async purgeTenant(tenantId) {

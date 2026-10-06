@@ -1,4 +1,4 @@
-import { MongoServerError, ObjectId, type Db } from "mongodb";
+import { MongoServerError, ObjectId, type Collection, type Db, type Document } from "mongodb";
 import type { BankTransaction, Customer, EmailCode, Estimate, Membership, Session, User, FundingApplication, Invoice, Lead, Message, Tenant } from "../domain";
 import { ConflictError, NotFoundError } from "../errors";
 import type { Repos } from "./types";
@@ -72,7 +72,18 @@ export async function createMongoRepos(db: Db): Promise<Repos> {
     customers.createIndex({ tenantId: 1, phone: 1 }, { unique: true, partialFilterExpression: { phone: { $type: "string" } } }),
     customers.createIndex({ tenantId: 1, lastSeenAt: -1 }),
     messages.createIndex({ tenantId: 1, _id: -1 }),
+    // The admin page's per-day counts
+    leads.createIndex({ createdAt: 1 }),
+    messages.createIndex({ createdAt: 1, status: 1 }),
   ]);
+
+  /** { "2026-10-06": 3, ... } for the documents matching `match`, by UTC day of createdAt. */
+  async function perDay(coll: Pick<Collection<Document>, "aggregate">, match: Document) {
+    const rows = (await coll
+      .aggregate([{ $match: match }, { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: "UTC" } }, n: { $sum: 1 } } }])
+      .toArray()) as { _id: string; n: number }[];
+    return Object.fromEntries(rows.map((r) => [r._id, r.n]));
+  }
 
   return {
     tenants: {
@@ -363,6 +374,27 @@ export async function createMongoRepos(db: Db): Promise<Repos> {
         await sessions.deleteMany({ userId, ...(except ? { _id: { $ne: except } } : {}) });
       },
     },
+    stats: {
+      async overview(since) {
+        const demoIds = (await tenants.find({ "demo.expiresAt": { $exists: true } }, { projection: { _id: 1 } }).toArray()).map((t) => t._id);
+        const after = { createdAt: { $gte: since } };
+        const [total, confirmed, real, signups, businesses, newLeads, emailsSent, emailsFailed] = await Promise.all([
+          users.countDocuments(),
+          users.countDocuments({ emailVerifiedAt: { $exists: true } }),
+          tenants.countDocuments({ "demo.expiresAt": { $exists: false } }),
+          perDay(users, after),
+          perDay(tenants, { ...after, "demo.expiresAt": { $exists: false } }),
+          perDay(leads, { ...after, tenantId: { $nin: demoIds } }),
+          perDay(messages, { ...after, status: "sent" }),
+          perDay(messages, { ...after, status: "failed" }),
+        ]);
+        return {
+          users: { total, confirmed },
+          businesses: { real, demosLive: demoIds.length },
+          daily: { signups, businesses, leads: newLeads, emailsSent, emailsFailed },
+        };
+      },
+    },
     async purgeTenant(tenantId) {
       // Children first, the tenant last: an interrupted purge leaves a tenant to retry, never orphans.
       await Promise.all([leads, estimates, invoices, applications, txns, customers, messages].map((c) => (c as typeof leads).deleteMany({ tenantId })));
@@ -371,8 +403,8 @@ export async function createMongoRepos(db: Db): Promise<Repos> {
       await tenants.deleteOne({ _id: tenantId });
     },
     usage: {
-      async increment(key) {
-        const c = await counters.findOneAndUpdate({ _id: `usage:${key}` }, { $inc: { seq: 1 } }, { upsert: true, returnDocument: "after" });
+      async increment(key, by = 1) {
+        const c = await counters.findOneAndUpdate({ _id: `usage:${key}` }, { $inc: { seq: by } }, { upsert: true, returnDocument: "after" });
         return c!.seq;
       },
       async peek(key) {

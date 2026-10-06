@@ -89,8 +89,8 @@ export interface MessageRepo {
 }
 
 export interface UsageRepo {
-  /** Atomically adds 1 to a named counter and returns the new value (e.g. "ai:2026-10-04"). */
-  increment(key: string): Promise<number>;
+  /** Atomically adds `by` (default 1) to a named counter and returns the new value (e.g. "ai:2026-10-04"). */
+  increment(key: string, by?: number): Promise<number>;
   /** The current value without changing it (0 if never counted). */
   peek(key: string): Promise<number>;
 }
@@ -130,6 +130,20 @@ export interface SessionRepo {
   deleteByUser(userId: Id, exceptIdHash?: string): Promise<void>;
 }
 
+/** Counts per UTC day ("2026-10-06" → n); days with nothing are left out. */
+export type DayCounts = Record<string, number>;
+export interface PlatformStats {
+  users: { total: number; confirmed: number };
+  businesses: { real: number; demosLive: number };
+  /** From `since` on. Leads count real businesses only; demo businesses are seeded with fake ones. */
+  daily: { signups: DayCounts; businesses: DayCounts; leads: DayCounts; emailsSent: DayCounts; emailsFailed: DayCounts };
+}
+
+export interface StatsRepo {
+  /** Platform-wide numbers for the owner's admin page. Never expose to a tenant route. */
+  overview(since: Date): Promise<PlatformStats>;
+}
+
 export interface Repos {
   tenants: TenantRepo;
   leads: LeadRepo;
@@ -144,6 +158,7 @@ export interface Repos {
   memberships: MembershipRepo;
   emailCodes: EmailCodeRepo;
   sessions: SessionRepo;
+  stats: StatsRepo;
   /** Deletes a business and everything it owns (demo cleanup). */
   purgeTenant(tenantId: Id): Promise<void>;
 }

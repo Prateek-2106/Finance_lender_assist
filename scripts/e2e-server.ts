@@ -7,7 +7,7 @@ import type { LlmClient } from "../src/deps";
 import type { Mailer, OutgoingEmail } from "../src/notify/mailer";
 import express from "express";
 
-import { E2E_DEMO_UW_KEY, E2E_KEY, E2E_UW_KEY } from "../e2e/constants";
+import { E2E_ADMIN_EMAIL, E2E_DEMO_UW_KEY, E2E_KEY, E2E_UW_KEY } from "../e2e/constants";
 
 // Emails are recorded, not sent; tests read them from /__test/emails.
 const outbox: (Omit<OutgoingEmail, "attachments"> & { attachments: string[] })[] = [];
@@ -67,6 +67,8 @@ const app = createApp({
       { name: "Demo underwriter", keyHash: hashApiKey(E2E_DEMO_UW_KEY), demoOnly: true },
     ],
     demo: { enabled: true, ttlDays: 3, underwriterKey: E2E_DEMO_UW_KEY },
+    adminEmails: [E2E_ADMIN_EMAIL],
+    dashboardUrl: "https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards/dashboard/VendorStreet",
   },
 });
 const outer = express();

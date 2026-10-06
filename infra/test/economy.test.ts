@@ -93,6 +93,38 @@ describe("economy profile", () => {
     expect(policies).not.toContain('"Action":"*"');
   });
 
+  it("watches the site: a dashboard, 8 alarms that email, an uptime check, and self-healing for the machine", () => {
+    t.resourceCountIs("AWS::CloudWatch::Dashboard", 1);
+    t.hasResourceProperties("AWS::CloudWatch::Dashboard", { DashboardName: "VendorStreet" });
+    t.resourceCountIs("AWS::CloudWatch::Alarm", 8); // the free tier covers 10
+    t.hasResourceProperties("AWS::Route53::HealthCheck", {
+      HealthCheckConfig: Match.objectLike({ Type: "HTTPS", FullyQualifiedDomainName: "example-vendorstreet.com", ResourcePath: "/health" }),
+    });
+    t.hasResourceProperties("AWS::CloudWatch::Alarm", { AlarmName: "vendorstreet-server-errors", Namespace: "VendorStreet", MetricName: "ServerErrors", Dimensions: [{ Name: "Service", Value: "web" }] });
+    t.hasResourceProperties("AWS::CloudWatch::Alarm", { AlarmName: "vendorstreet-slow-pages", ExtendedStatistic: "p95", Threshold: 1500 });
+    t.hasResourceProperties("AWS::CloudWatch::Alarm", { AlarmName: "vendorstreet-site-down", TreatMissingData: "breaching", Metrics: Match.arrayWith([Match.objectLike({ MetricStat: Match.objectLike({ Metric: Match.objectLike({ Namespace: "AWS/Route53", MetricName: "HealthCheckStatus" }) }) })]) });
+    t.hasResourceProperties("AWS::CloudWatch::Alarm", {
+      MetricName: "StatusCheckFailed_System",
+      AlarmActions: Match.arrayWith([Match.objectLike({ "Fn::Join": Match.arrayWith([Match.arrayWith([Match.stringLikeRegexp("ec2:recover")])]) })]),
+    });
+    // Every alarm tells you when it fires and when it clears
+    for (const a of Object.values(t.findResources("AWS::CloudWatch::Alarm")) as { Properties: { AlarmActions: unknown[]; OKActions: unknown[] } }[]) {
+      expect(a.Properties.AlarmActions.length).toBeGreaterThan(0);
+      expect(a.Properties.OKActions).toHaveLength(1);
+    }
+    t.resourceCountIs("AWS::SNS::Subscription", 0); // no alertEmail given here
+  });
+
+  it("emails alarms to alertEmail when it's set", () => {
+    const stack = new EconomyStack(new cdk.App(), "Alerts", {
+      env: { account: "123456789012", region: "us-east-1" },
+      domainName: "example-vendorstreet.com",
+      hostedZoneId: "Z0000000EXAMPLE",
+      alertEmail: "ops@example.com",
+    });
+    Template.fromStack(stack).hasResourceProperties("AWS::SNS::Subscription", { Protocol: "email", Endpoint: "ops@example.com" });
+  });
+
   it("refuses regions other than us-east-1 (CloudFront certificates live there)", () => {
     expect(() => new EconomyStack(new cdk.App(), "X", { env: { account: "123456789012", region: "eu-west-1" }, domainName: "x.com", hostedZoneId: "Z1" })).toThrow(/us-east-1/);
   });

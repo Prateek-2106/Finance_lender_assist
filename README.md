@@ -284,3 +284,37 @@ Real businesses are created by people with confirmed emails; demos stay one clic
 Locally, emails land in Mailpit (http://localhost:8025). With `MAIL_TRANSPORT=none`, the code is printed in the server window (never in production). Open the app at `http://lvh.me:3000`, not `localhost`, so the cookie covers the business subdomains.
 
 **On the live site, SES starts in sandbox mode:** it only delivers to addresses you've verified in SES. Request production access (SES → Account dashboard) before inviting anyone else to sign in.
+
+## Telemetry: metrics, alarms, the admin page
+
+**Server metrics, without an SDK.** `src/telemetry/metrics.ts` adds counts and timings up in memory and writes one JSON line a minute in CloudWatch's [Embedded Metric Format](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch_Embedded_Metric_Format_Specification.html). Docker already ships stdout to CloudWatch Logs, which turns those lines into metrics: no `PutMetricData` calls and no extra permissions. On by default in production (`METRICS=off` to disable).
+
+| Metric | What |
+| --- | --- |
+| `Requests`, `ClientErrors`, `ServerErrors` | every request except `/health`, by outcome |
+| `Latency` | response time; AI drafts and memos are left out so they don't hide slow pages |
+| `AiCalls`, `AiFailures`, `AiLatency`, `AiCostUsd` | every model call, priced from the token counts the API returns (`src/telemetry/aiUsage.ts`) |
+| `EmailsSent`, `EmailsFailed` | every email the platform tries to send |
+
+That's 10 custom metrics, which is CloudWatch's free tier (a test keeps it that way).
+
+**Dashboard and alarms** (`infra/lib/monitoring.ts`): one dashboard named `VendorStreet` (traffic, latency p50/p95/p99, AI calls and spend, email, CPU and burst credits, CloudFront, uptime, and a live table of recent errors). Eight alarms email you when they fire and when they clear:
+
+| Alarm | Fires when |
+| --- | --- |
+| `site-down` | Route 53's checkers can't load `https://<domain>/health` for 2 minutes |
+| `server-errors` | 5+ HTTP 5xx in 5 minutes |
+| `slow-pages` | p95 over 1.5 s for 15 minutes |
+| `ai-failures` | 3+ failed model calls in 15 minutes |
+| `ai-spend` | more than $1 of AI in an hour |
+| `emails-failing` | 3+ failed emails in an hour |
+| `instance-hardware` | AWS hardware trouble: the instance is **recovered** onto new hardware automatically |
+| `instance-stuck` | the OS stops responding: the instance is **rebooted** automatically |
+
+Turn on the emails with `npx cdk deploy -c alertEmail=you@example.com` (or set `alertEmail` in `cdk.json`), then click the confirmation link AWS sends. Cost: about $0.75/month for the uptime check; the rest fits in the free tier.
+
+**The admin page** (`/admin`): sign-ups, new businesses, demos started, leads (real businesses only), AI calls, tokens and dollars, and emails, by day for 14 days. It's for the people who run the platform: list their emails in `ADMIN_EMAILS` (comma-separated) and confirm the account. Signed-in admins see a **Platform numbers** link on their account page.
+
+```bash
+aws ssm put-parameter --name /vendorstreet/ADMIN_EMAILS --type String --value "you@example.com"
+```

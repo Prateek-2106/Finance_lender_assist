@@ -4,7 +4,7 @@ import { api, ApiError } from "../api";
 import { ErrorText } from "../ui/bits";
 
 type Business = { id: string; name: string; subdomain: string; role: string; dashboardUrl: string; siteUrl: string };
-type Me = { user: { id: string; email: string; name: string | null }; businesses: Business[]; limits: { businesses: number } };
+type Me = { user: { id: string; email: string; name: string | null }; businesses: Business[]; limits: { businesses: number }; admin?: boolean };
 
 /** The platform's own address (where sign-in lives), from any business subdomain. */
 export async function apexUrl() {
@@ -13,12 +13,12 @@ export async function apexUrl() {
   return `${location.protocol}//${base}${location.port ? `:${location.port}` : ""}`;
 }
 
-function Frame({ children, title }: { children: React.ReactNode; title: string }) {
+export function Frame({ children, title, wide }: { children: React.ReactNode; title: string; wide?: boolean }) {
   useEffect(() => {
     document.title = `${title} · Vendor Street`;
   }, [title]);
   return (
-    <div className="site auth">
+    <div className={wide ? "site auth wide" : "site auth"}>
       <header>
         <p className="eyebrow"><a href="/">Vendor Street</a></p>
         <h1>{title}</h1>
@@ -225,7 +225,10 @@ export function AccountPage() {
     <Frame title="Your businesses">
       <div className="row" style={{ justifyContent: "space-between" }}>
         <p className="quiet">Signed in as <strong style={{ color: "var(--ink)" }}>{me.user.email}</strong></p>
-        <button className="secondary small" onClick={signOut}>Sign out</button>
+        <div className="row">
+          {me.admin && <a className="button secondary small" href="/admin">Platform numbers</a>}
+          <button className="secondary small" onClick={signOut}>Sign out</button>
+        </div>
       </div>
 
       {created && (

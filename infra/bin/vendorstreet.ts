@@ -20,6 +20,7 @@ if ((ctx("profile") ?? "economy") === "economy") {
     githubRepoIds: ctx("githubRepoIds"),
     githubOidcProviderArn: ctx("githubOidcProviderArn"),
     instanceType: ctx("instanceType"),
+    alertEmail: ctx("alertEmail"),
     tags: { project: "vendorstreet" },
   });
 } else {

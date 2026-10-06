@@ -4,6 +4,7 @@ import { NotFoundError } from "../errors";
 import { rateLimit } from "../lib/rateLimit";
 import { tenantUrl } from "../notify/notifier";
 import { createDemoBusiness } from "../services/demo";
+import { demoCounterKey } from "./admin";
 
 /** What the homepage needs, and the "Try it" button. No tenant: these live on the apex domain. */
 export function platformRouter(deps: Deps) {
@@ -30,6 +31,7 @@ export function platformRouter(deps: Deps) {
   r.post("/demo", demoLimit, async (_req, res) => {
     if (!config.demo?.enabled) throw new NotFoundError("Demos are turned off on this server");
     const { tenant, apiKey } = await createDemoBusiness(deps);
+    await deps.repos.usage.increment(demoCounterKey(new Date().toISOString().slice(0, 10))); // for /admin
     // The key travels in the URL fragment, which browsers never send to servers or put in logs;
     // the dashboard stores it for this tab and removes it from the address bar.
     res.status(201).json({

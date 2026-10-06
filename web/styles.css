@@ -273,3 +273,10 @@ code.key { display: block; word-break: break-all; background: var(--paper); bord
 .file-button { position: relative; overflow: hidden; }
 .file-button input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .csv-sample { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius); padding: 0.6rem; font-size: var(--step--1); overflow-x: auto; }
+
+/* Admin */
+.site.wide { max-width: 64rem; }
+.seg { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.facts { display: grid; grid-template-columns: max-content 1fr; gap: 0.35rem 1.25rem; margin: 0; }
+.facts dt { color: var(--ink-2); font-size: var(--step--1); padding-top: 0.1rem; }
+.facts dd { margin: 0; font-variant-numeric: tabular-nums; }

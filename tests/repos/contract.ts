@@ -245,12 +245,44 @@ export function repoContract(name: string, makeRepos: () => Promise<Repos>) {
       });
     });
 
+    describe("platform stats", () => {
+      it("count accounts, real businesses and their leads, and emails by day; demos are kept apart", async () => {
+        const since = new Date(Date.now() - 86_400_000);
+        const today = new Date().toISOString().slice(0, 10);
+        const yesterdayLead = new Date(Date.now() - 2 * 86_400_000);
+        const a = await repos.users.upsertByEmail("a@x.co");
+        await repos.users.update(a.user.id, { emailVerifiedAt: new Date() });
+        await repos.users.upsertByEmail("b@x.co");
+        const real = await repos.tenants.create(tenantInput("real"));
+        const demo = await repos.tenants.create(tenantInput("demo-1", { demo: { expiresAt: new Date(Date.now() + 86_400_000) } }));
+        await repos.leads.create({ tenantId: real.id, name: "A", email: "a@b.co", message: "x", source: "web" });
+        await repos.leads.create({ tenantId: real.id, name: "Old", email: "a@b.co", message: "x", source: "web", createdAt: yesterdayLead });
+        await repos.leads.create({ tenantId: demo.id, name: "Fake", email: "f@b.co", message: "x", source: "web" });
+        const sent = await repos.messages.create({ tenantId: real.id, template: "a", subject: "A", status: "queued" });
+        await repos.messages.setStatus(sent.id, "sent", { sentAt: new Date() });
+        await repos.messages.create({ tenantId: "platform", template: "b", subject: "B", status: "failed" });
+        await repos.messages.create({ tenantId: demo.id, template: "c", subject: "C", status: "skipped" });
+
+        const s = await repos.stats.overview(since);
+        expect(s.users).toEqual({ total: 2, confirmed: 1 });
+        expect(s.businesses).toEqual({ real: 1, demosLive: 1 });
+        expect(s.daily).toEqual({
+          signups: { [today]: 2 },
+          businesses: { [today]: 1 },
+          leads: { [today]: 1 }, // not the demo's, not the one from before `since`
+          emailsSent: { [today]: 1 },
+          emailsFailed: { [today]: 1 },
+        });
+      });
+    });
+
     describe("accounts", () => {
       it("usage counters can be read without counting", async () => {
         expect(await repos.usage.peek("x")).toBe(0);
         await repos.usage.increment("x");
         await repos.usage.increment("x");
         expect(await repos.usage.peek("x")).toBe(2);
+        expect(await repos.usage.increment("x", 40)).toBe(42);
       });
 
       it("one user per email, whatever its case", async () => {

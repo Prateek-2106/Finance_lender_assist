@@ -22,14 +22,29 @@ export interface Config {
   trustProxyHops?: number;
   /** CloudFront adds this as X-Origin-Verify; requests without it are refused. */
   originSecret?: string;
+  /** Signed-in accounts with these emails can open /admin (platform numbers). */
+  adminEmails?: string[];
+  /** Linked from /admin. */
+  dashboardUrl?: string;
   /** Shown on the homepage. */
   site?: { author?: string; repoUrl?: string };
 }
 
 /** Minimal LLM interface (step 8). Implement it with any provider. */
+export interface LlmRequest {
+  system: string;
+  prompt: string;
+  json?: boolean;
+}
+export interface LlmUsage {
+  inputTokens: number;
+  outputTokens: number;
+}
 export interface LlmClient {
   readonly model: string; // recorded on everything the model produces
-  complete(req: { system: string; prompt: string; json?: boolean }): Promise<string>;
+  complete(req: LlmRequest): Promise<string>;
+  /** Providers that report token counts implement this too; telemetry uses it to track cost. */
+  completeWithUsage?(req: LlmRequest): Promise<{ text: string; usage?: LlmUsage }>;
 }
 
 /** Minimal DNS interface (step 10). Real impl wraps node:dns/promises. */
@@ -44,4 +59,6 @@ export interface Deps {
   llm?: LlmClient;
   dns?: DnsResolver;
   mailer?: import("./notify/mailer").Mailer; // step 11: Mailpit locally, SES in production
+  /** CloudWatch metrics in production; nothing by default. */
+  metrics?: import("./telemetry/metrics").Metrics;
 }

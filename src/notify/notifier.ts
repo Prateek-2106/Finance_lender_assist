@@ -4,6 +4,7 @@ import { renderInvoicePdf } from "../lib/invoicePdf";
 import type { Repos } from "../repos/types";
 import { applicantView } from "../risk/applicantView";
 import type { Mailer, OutgoingEmail } from "./mailer";
+import { noMetrics, type Metrics } from "../telemetry/metrics";
 import { templates, type Rendered } from "./templates";
 
 /** https://joes-plumbing.yourdomain.com, or http://joes-plumbing.lvh.me:3000 locally. */
@@ -27,6 +28,7 @@ export class Notifier {
     private readonly repos: Repos,
     private readonly config: Config,
     private readonly mailer?: Mailer,
+    private readonly metrics: Metrics = noMetrics,
   ) {}
 
   async idle() {
@@ -51,8 +53,10 @@ export class Notifier {
         if (skip) return;
         try {
           await this.mailer!.send({ to: to!, subject: r.subject, text: r.text, html: r.html, attachments: r.attachments });
+          this.metrics.count("EmailsSent");
           await this.repos.messages.setStatus(msg.id, "sent", { sentAt: new Date() });
         } catch (e) {
+          this.metrics.count("EmailsFailed");
           await this.repos.messages.setStatus(msg.id, "failed", { error: (e as Error).message.slice(0, 300) });
           console.warn(`[email] ${template} to ${to} failed: ${(e as Error).message}`);
         }
@@ -77,8 +81,10 @@ export class Notifier {
       const msg = await this.repos.messages.create({ tenantId: "platform", template, subject: r.subject, to, status: "queued" });
       try {
         await this.mailer.send({ to, subject: r.subject, text: r.text, html: r.html });
+        this.metrics.count("EmailsSent");
         await this.repos.messages.setStatus(msg.id, "sent", { sentAt: new Date() });
       } catch (e) {
+        this.metrics.count("EmailsFailed");
         await this.repos.messages.setStatus(msg.id, "failed", { error: (e as Error).message.slice(0, 300) });
         console.warn(`[email] ${template} to ${to} failed: ${(e as Error).message}`);
       }

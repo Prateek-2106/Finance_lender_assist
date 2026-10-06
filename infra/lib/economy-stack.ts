@@ -6,6 +6,7 @@
 //                     one EC2 instance (Elastic IP) running the Docker image from ECR
 //                          │
 //                          ├─▶ MongoDB Atlas (free M0)   ├─▶ SES (email)   ├─▶ Anthropic (capped)
+//                          └─▶ CloudWatch: logs, metrics (EMF), dashboard, alarms → email (monitoring.ts)
 //
 // Trade-offs, on purpose: one instance (a deploy restarts the container: a few seconds of downtime),
 // and CloudFront→instance is HTTP inside AWS's network, guarded by a security group that only admits
@@ -25,6 +26,7 @@ import * as ses from "aws-cdk-lib/aws-ses";
 import * as ssm from "aws-cdk-lib/aws-ssm";
 import type { Construct } from "constructs";
 import { githubSubjects } from "./github.js";
+import { Monitoring } from "./monitoring.js";
 
 /** AWS-managed list of CloudFront's origin-facing addresses (`com.amazonaws.global.cloudfront.origin-facing`), per region. */
 export const CLOUDFRONT_PREFIX_LISTS: Record<string, string> = { "us-east-1": "pl-3b927c52" };
@@ -39,6 +41,8 @@ export interface EconomyProps extends cdk.StackProps {
   /** t3.micro (1 GB) is enough for a demo; t3.small if you see memory pressure. */
   instanceType?: string;
   cloudfrontPrefixListId?: string;
+  /** Alarms are emailed here (confirm the subscription email AWS sends first). */
+  alertEmail?: string;
   /** Non-secret settings passed to the container. Secrets come from SSM under /vendorstreet/. */
   environment?: Record<string, string>;
 }
@@ -228,6 +232,9 @@ echo "app did not become healthy"; docker logs --tail 80 vendorstreet; exit 1
     const alias = route53.RecordTarget.fromAlias(new targets.CloudFrontTarget(distribution));
     new route53.ARecord(this, "Apex", { zone, target: alias });
     new route53.ARecord(this, "Wildcard", { zone, recordName: `*.${domainName}`, target: alias });
+
+    // ── dashboard, alarms (emailed), uptime check
+    new Monitoring(this, "Monitoring", { domainName, instance, distribution, logGroup, alertEmail: props.alertEmail });
 
     new cdk.CfnOutput(this, "Url", { value: `https://${domainName}` });
     new cdk.CfnOutput(this, "InstanceId", { value: instance.instanceId });

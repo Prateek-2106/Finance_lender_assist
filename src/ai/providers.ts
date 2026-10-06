@@ -1,4 +1,4 @@
-import type { LlmClient } from "../deps";
+import type { LlmClient, LlmRequest, LlmUsage } from "../deps";
 
 export class LlmError extends Error {
   readonly status = 502;
@@ -8,9 +8,12 @@ export class LlmError extends Error {
 export function ollama(opts: { url?: string; model?: string } = {}): LlmClient {
   const url = (opts.url ?? "http://localhost:11434").replace(/\/$/, "");
   const model = opts.model ?? "llama3.1:8b";
-  return {
+  const client = {
     model: `ollama/${model}`,
-    async complete({ system, prompt, json }) {
+    async complete(req: LlmRequest) {
+      return (await client.completeWithUsage(req)).text;
+    },
+    async completeWithUsage({ system, prompt, json }: LlmRequest): Promise<{ text: string; usage?: LlmUsage }> {
       const res = await fetch(`${url}/api/chat`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -29,18 +32,22 @@ export function ollama(opts: { url?: string; model?: string } = {}): LlmClient {
         throw new LlmError(`Ollama unreachable at ${url}: ${e.message}`);
       });
       if (!res.ok) throw new LlmError(`Ollama ${res.status}: ${(await res.text()).slice(0, 200)}`);
-      const body = (await res.json()) as { message?: { content?: string } };
-      return body.message?.content ?? "";
+      const body = (await res.json()) as { message?: { content?: string }; prompt_eval_count?: number; eval_count?: number };
+      return { text: body.message?.content ?? "", usage: { inputTokens: body.prompt_eval_count ?? 0, outputTokens: body.eval_count ?? 0 } };
     },
   };
+  return client;
 }
 
 /** Claude via the Messages API. */
 export function anthropic(opts: { apiKey: string; model?: string }): LlmClient {
   const model = opts.model ?? "claude-sonnet-5-5";
-  return {
+  const client = {
     model: `anthropic/${model}`,
-    async complete({ system, prompt }) {
+    async complete(req: LlmRequest) {
+      return (await client.completeWithUsage(req)).text;
+    },
+    async completeWithUsage({ system, prompt }: LlmRequest): Promise<{ text: string; usage?: LlmUsage }> {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "content-type": "application/json", "x-api-key": opts.apiKey, "anthropic-version": "2023-06-01" },
@@ -50,10 +57,14 @@ export function anthropic(opts: { apiKey: string; model?: string }): LlmClient {
         throw new LlmError(`Claude API unreachable: ${e.message}`);
       });
       if (!res.ok) throw new LlmError(`Claude API ${res.status}: ${(await res.text()).slice(0, 200)}`);
-      const body = (await res.json()) as { content?: { type: string; text?: string }[] };
-      return (body.content ?? []).filter((c) => c.type === "text").map((c) => c.text).join("");
+      const body = (await res.json()) as { content?: { type: string; text?: string }[]; usage?: { input_tokens?: number; output_tokens?: number } };
+      return {
+        text: (body.content ?? []).filter((c) => c.type === "text").map((c) => c.text).join(""),
+        usage: { inputTokens: body.usage?.input_tokens ?? 0, outputTokens: body.usage?.output_tokens ?? 0 },
+      };
     },
   };
+  return client;
 }
 
 /** LLM_PROVIDER = ollama (default) | anthropic | none */

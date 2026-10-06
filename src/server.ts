@@ -9,6 +9,7 @@ import { mailerFromEnv } from "./notify/mailer";
 import { parseUnderwriters } from "./middleware/underwriter";
 import { hashApiKey } from "./lib/apiKey";
 import { scheduleDemoCleanup } from "./services/demoCleanup";
+import { emfMetrics, flushPeriodically } from "./telemetry/metrics";
 
 const PORT = Number(process.env.PORT ?? 3000);
 const MONGO_URL = process.env.MONGO_URL;
@@ -35,10 +36,16 @@ async function main() {
   if (demoEnabled && demoUnderwriterKey) underwriters.push({ ...parseUnderwriters(`Demo underwriter=${demoUnderwriterKey}`)[0]!, demoOnly: true });
   const openSignup = flag(env.OPEN_SIGNUP, !prod); // production: only the admin creates real businesses
   if (!openSignup && !env.ADMIN_TOKEN) console.warn("OPEN_SIGNUP is off and ADMIN_TOKEN is unset: nobody can create a real business");
+  // Metrics: EMF lines on stdout, which CloudWatch turns into metrics (production default). METRICS=off to disable.
+  const metricsOn = (env.METRICS ?? (prod ? "emf" : "off")) === "emf";
+  const metrics = metricsOn ? emfMetrics() : undefined;
+  if (metrics) flushPeriodically(metrics);
+  const region = env.AWS_REGION ?? "us-east-1";
   const app = createApp({
     repos,
     llm,
     mailer,
+    metrics,
     dns: new Resolver({ timeout: 5000, tries: 2 }),
     config: {
       baseDomain: process.env.BASE_DOMAIN ?? "lvh.me",
@@ -53,6 +60,10 @@ async function main() {
       ...(env.ORIGIN_SECRET ? { originSecret: env.ORIGIN_SECRET } : {}),
       production: prod,
       trustProxyHops: int(env.TRUST_PROXY_HOPS, prod ? 1 : 0),
+      adminEmails: (env.ADMIN_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean),
+      ...(env.DASHBOARD_URL || prod
+        ? { dashboardUrl: env.DASHBOARD_URL ?? `https://${region}.console.aws.amazon.com/cloudwatch/home?region=${region}#dashboards/dashboard/VendorStreet` }
+        : {}),
       site: { author: env.SITE_AUTHOR ?? "Prateek Ghosh", ...(env.SITE_REPO_URL ? { repoUrl: env.SITE_REPO_URL } : {}) },
     },
   });
@@ -64,6 +75,7 @@ async function main() {
     console.log(`tenant sites: http://<subdomain>.lvh.me:${PORT}`);
     console.log(`language model: ${llm?.model ?? "none"}`);
     console.log(`email: ${mailer?.name ?? "off"}${mailer?.name.startsWith("smtp localhost") ? "  (inbox: http://localhost:8025)" : ""}`);
+    console.log(`metrics: ${metricsOn ? "CloudWatch (EMF on stdout)" : "off"}`);
     console.log(`homepage: http://localhost:${PORT}  (sign-up ${openSignup ? "open" : "closed"}, demos ${demoEnabled ? "on" : "off"})`);
     if (underwriterSpec === DEV_UNDERWRITER) console.log(`underwriter console: http://localhost:${PORT}/underwriting  (demo key: uw_dev_priya_0001)`);
   });

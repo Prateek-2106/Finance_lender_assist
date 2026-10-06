@@ -24,6 +24,7 @@ import {
   startSession,
 } from "../auth/session";
 import type { Request, Response } from "express";
+import { isAdmin } from "./admin";
 
 export const MAX_BUSINESSES_PER_USER = 3;
 const EMAILS_PER_ADDRESS_PER_HOUR = 5; // codes and notices sent to one address
@@ -165,7 +166,7 @@ export function authRouter(deps: Deps, notifier: Notifier) {
   r.get("/me", async (req, res) => {
     const auth = await currentUser(repos, req, res);
     if (!auth) throw new UnauthorizedError("Not signed in");
-    res.json({ user: publicUser(auth.user), businesses: await businessesOf(auth.user.id), limits: { businesses: MAX_BUSINESSES_PER_USER } });
+    res.json({ user: publicUser(auth.user), businesses: await businessesOf(auth.user.id), limits: { businesses: MAX_BUSINESSES_PER_USER }, admin: isAdmin(config, auth.user) });
   });
 
   r.post("/logout", async (req, res) => {

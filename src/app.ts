@@ -17,14 +17,22 @@ import { ownerRouter } from "./routes/owner"; // step 11
 import { Notifier } from "./notify/notifier"; // step 11
 import { platformRouter } from "./routes/platform"; // step 12
 import { authRouter } from "./routes/auth"; // accounts
+import { adminRouter } from "./routes/admin"; // telemetry: platform numbers
+import { noMetrics } from "./telemetry/metrics";
+import { requestMetrics } from "./telemetry/requestMetrics";
+import { instrumentLlm } from "./telemetry/aiUsage";
 
-export function createApp(deps: Deps) {
+export function createApp(input: Deps) {
   const app = express();
-  const notifier = new Notifier(deps.repos, deps.config, deps.mailer);
+  const metrics = input.metrics ?? noMetrics;
+  // Every model call is timed, counted and priced here, so no route can forget to.
+  const deps: Deps = { ...input, metrics, ...(input.llm ? { llm: instrumentLlm(input.llm, { metrics, repos: input.repos }) } : {}) };
+  const notifier = new Notifier(deps.repos, deps.config, deps.mailer, metrics);
   app.locals.notifier = notifier; // tests await notifier.idle() before checking emails
   // How many proxies sit in front of us (CloudFront = 1, CloudFront + ALB = 2). A count, never `true`:
   // with `true`, req.ip is whatever the visitor writes in X-Forwarded-For, and rate limits mean nothing.
   app.set("trust proxy", deps.config.trustProxyHops ?? 0);
+  app.use(requestMetrics(metrics));
   app.use(express.json({ limit: "100kb" }));
 
   app.get("/health", (_req, res) => {
@@ -45,6 +53,7 @@ export function createApp(deps: Deps) {
   app.use("/api/tenants", tenantsRouter(deps));
   app.use("/api", platformRouter(deps)); // /api/platform, /api/demo (step 12)
   app.use("/api/auth", authRouter(deps, notifier)); // sign in by email, your businesses
+  app.use("/api/admin", adminRouter(deps)); // the platform owner's numbers
   app.use("/webhooks", webhooksRouter(deps, notifier));
   app.use("/api/underwriting", underwritingRouter(deps, notifier)); // OPF-side staff, across all businesses
 
@@ -65,7 +74,7 @@ export function createApp(deps: Deps) {
     // Vite puts a content hash in every file name under /assets, so those can be cached for a year.
     app.use("/assets", express.static(resolve(webDir, "assets"), { immutable: true, maxAge: "365d", fallthrough: false }));
     app.use(express.static(webDir, { index: false }));
-    app.get(/^\/((app|underwriting|scoring|signin|signup|verify|forgot|account)(\/.*)?)?$/, (_req, res) => res.sendFile(resolve(webDir, "index.html")));
+    app.get(/^\/((app|underwriting|scoring|signin|signup|verify|forgot|account|admin)(\/.*)?)?$/, (_req, res) => res.sendFile(resolve(webDir, "index.html")));
   }
 
   app.use(notFoundHandler);
