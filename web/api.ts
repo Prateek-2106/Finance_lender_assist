@@ -1,9 +1,26 @@
 // Thin fetch wrapper. Same origin, so the Host header tells the API which tenant this is.
+// A key someone typed lasts for this tab only. A demo key that arrived in a link is also kept
+// in this browser, so a demo survives new tabs and switching between the business and the console.
+const safe = <T,>(f: () => T, fallback: T): T => {
+  try {
+    return f();
+  } catch {
+    return fallback; // storage blocked (private mode, strict settings)
+  }
+};
 function keyStore(name: string) {
   return {
-    get: () => sessionStorage.getItem(name),
-    set: (k: string) => sessionStorage.setItem(name, k),
-    clear: () => sessionStorage.removeItem(name),
+    get: () => safe(() => sessionStorage.getItem(name) ?? localStorage.getItem(name), null),
+    set: (k: string, remember = false) =>
+      safe(() => {
+        sessionStorage.setItem(name, k);
+        if (remember) localStorage.setItem(name, k);
+      }, undefined),
+    clear: () =>
+      safe(() => {
+        sessionStorage.removeItem(name);
+        localStorage.removeItem(name);
+      }, undefined),
   };
 }
 /** The business owner's key, for this business's address. */
@@ -13,12 +30,12 @@ export const uwSession = keyStore("vendorstreet.underwriterKey");
 
 /**
  * "#key=sk_…" in the address (the "Try it" button, the demo underwriter link): keep the key for
- * this tab and take it out of the address bar, so it isn't bookmarked, shared or left in history.
+ * this browser and take it out of the address bar, so it isn't bookmarked, shared or left in history.
  */
 export function takeKeyFromHash(store: ReturnType<typeof keyStore>, next = "#/") {
   const m = /^#key=([\w-]+)/.exec(location.hash);
   if (!m) return;
-  store.set(m[1]!);
+  store.set(m[1]!, true);
   history.replaceState(null, "", `${location.pathname}${location.search}${next}`);
 }
 

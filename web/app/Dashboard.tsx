@@ -114,7 +114,7 @@ function DemoBanner({ onDemo }: { onDemo: (isDemo: boolean) => void }) {
         <strong>Demo business.</strong> Everyone and everything here is made up. Emails are kept under Insights, never sent. Expires {day(demo.expiresAt)}.
       </p>
       {uwKey && (
-        <a className="button secondary small" href={`/underwriting#key=${uwKey}`} target="_blank" rel="noopener" data-tour="uw-link">
+        <a className="button secondary small" href={`/underwriting#key=${uwKey}`} data-tour="uw-link">
           Open the underwriter console
         </a>
       )}
