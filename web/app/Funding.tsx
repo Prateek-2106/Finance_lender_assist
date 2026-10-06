@@ -175,6 +175,11 @@ function ApplicationDetail({ id, onChange }: { id: string; onChange: () => void 
           </div>
         </details>
       )}
+      {app.assessment && (
+        <p className="small">
+          <a href="/scoring" target="_blank" rel="noopener" data-tour="how-scored">How every application is scored: the formulas and sources →</a>
+        </p>
+      )}
       {(app.decisionLog?.length ?? 0) > 1 && (
         <details>
           <summary>History</summary>

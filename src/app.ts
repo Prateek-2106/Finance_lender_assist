@@ -63,7 +63,7 @@ export function createApp(deps: Deps) {
     // Vite puts a content hash in every file name under /assets, so those can be cached for a year.
     app.use("/assets", express.static(resolve(webDir, "assets"), { immutable: true, maxAge: "365d", fallthrough: false }));
     app.use(express.static(webDir, { index: false }));
-    app.get(/^\/((app|underwriting)(\/.*)?)?$/, (_req, res) => res.sendFile(resolve(webDir, "index.html")));
+    app.get(/^\/((app|underwriting|scoring)(\/.*)?)?$/, (_req, res) => res.sendFile(resolve(webDir, "index.html")));
   }
 
   app.use(notFoundHandler);

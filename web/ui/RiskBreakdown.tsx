@@ -16,6 +16,10 @@ export function RiskBreakdown({ a, showEngineDecision = true }: { a: Assessment;
           </div>
         </div>
       )}
+      <div className="strip-head">
+        <span className="small quiet">Score {a.score} of 100, band {a.band}</span>
+        <a href="/scoring" target="_blank" rel="noopener" className="small" data-tour="how-scored">How is this scored? →</a>
+      </div>
       <ScoreStrip lines={a.scoreLines} metrics={a.metrics} score={a.score} />
       {a.reasons.length > 0 && (
         <ul className="reasons" data-testid="reasons">

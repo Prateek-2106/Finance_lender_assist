@@ -39,5 +39,16 @@ export function ErrorText({ error }: { error: unknown }) {
 
 /** Citations like [M7] or [K1], shown quietly after a sentence. */
 export function Cites({ ids }: { ids: string[] }) {
-  return ids.length ? <span className="cite">[{ids.join(", ")}]</span> : null;
+  if (!ids.length) return null;
+  // Measure ids link to their definition on the scoring page
+  return (
+    <span className="cite">
+      [{ids.map((id, i) => (
+        <span key={id}>
+          {i > 0 && ", "}
+          {/^M\d$/.test(id) ? <a href={`/scoring#${id.toLowerCase()}`} target="_blank" rel="noopener" title={`How ${id} is measured`}>{id}</a> : id}
+        </span>
+      ))}]
+    </span>
+  );
 }

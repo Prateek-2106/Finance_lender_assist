@@ -12,18 +12,21 @@ export type Platform = {
   repoUrl: string | null;
 };
 
-const TRY = [
-  { what: "Draft a quote with AI", how: "Open the newest lead (Jordan, leaking water heater) and press Draft with AI. The model picks items from the price list; prices come from the list, never from the model, and a person approves before anything is sent." },
-  { what: "Send, accept, invoice, get paid", how: "Walk an estimate through each stage. Every stage writes the email it would send. Open them under Insights → Emails." },
-  { what: "Ask for funding", how: "Funding shows three applications scored from bank statements: one approved, one declined, one waiting for a person. Each answer is in plain words, with what would help next time." },
-  { what: "Be the underwriter", how: "From the waiting application, open the underwriter console and approve or decline it with a note. Your name goes on the decision and the business sees it." },
-  { what: "Read the numbers", how: "Insights turns six months of work into a funnel, monthly revenue, days to pay and repeat customers." },
+// Act 1 is running the business; act 2 is what that record makes possible.
+const ACT_1 = [
+  { what: "See the numbers first", how: "Your demo opens on Insights: six months of jobs turned into money paid, average job, days to pay, unpaid invoices and repeat customers. Nothing here is typed in; it all comes from the work below." },
+  { what: "Win the next job", how: "Under Leads, open the newest request (Jordan, leaking water heater) and press Draft estimate. The AI picks items from the price list; prices always come from the list, and you approve before the customer sees anything." },
+  { what: "Get paid", how: "Send the estimate, mark it accepted, create the invoice, record the payment. Each stage writes its email (open them under Insights → Emails), and the numbers update." },
+];
+const ACT_2 = [
+  { what: "Ask what you qualify for", how: "Funding shows three applications scored from bank statements: one approved, one declined, one waiting for a person. Each answer is in plain words, with an estimated APR and what would help next time." },
+  { what: "Be the underwriter", how: "Open the underwriter console, read why the scorecard couldn't decide, ask the AI for a fact-checked memo, and approve or decline with a note. Your name goes on the decision." },
 ];
 
 const BUILT = [
   ["React + TypeScript", "Dashboard, public business sites, underwriter console"],
   ["Node + Express + MongoDB Atlas", "Multi-tenant REST API; the business comes from the web address"],
-  ["Risk engine", "Bank-statement parsing, 8 metrics, knockouts, scorecard bands, affordability-capped offers"],
+  ["Risk engine", "Bank-statement parsing, 8 measures, automatic stops, scorecard bands, affordability-capped offers (see How the funding score works)"],
   ["Claude (capped)", "Drafts quotes and underwriting memos; every claim is checked against the numbers before anyone sees it"],
   ["Twilio + SES", "Leads by text message; an email at every stage"],
   ["AWS", "CloudFront, EC2 + ECR, Route 53, ACM, SES, SSM, defined in CDK; GitHub Actions deploys on push"],
@@ -35,7 +38,7 @@ export function Home({ platform }: { platform: Platform }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   useEffect(() => {
-    document.title = "Vendor Street · run a small business, get funded";
+    document.title = "Vendor Street · run a small business, see what it can borrow";
   }, []);
 
   async function start() {
@@ -54,10 +57,10 @@ export function Home({ platform }: { platform: Platform }) {
     <div className="home">
       <header className="hero" data-tour="hero">
         <p className="eyebrow">Vendor Street</p>
-        <h1>A website, quotes, invoices and funding for a small business, in one place.</h1>
+        <h1>Run a small business from one place, and watch the numbers build themselves.</h1>
         <p className="lede">
-          A plumber gets a website that takes requests, drafts quotes with AI, sends invoices and records payments. When they need money for a new van, the
-          same platform reads their bank statements and decides, in plain words, how much it can offer.
+          A plumber gets a website that takes requests, AI-drafted quotes they approve, invoices and payments, and a dashboard that adds it all up.
+          And because the platform sees how the business earns, it can tell them what funding they qualify for, and exactly why.
         </p>
         {platform.demo ? (
           <div className="cta">
@@ -65,7 +68,7 @@ export function Home({ platform }: { platform: Platform }) {
               {busy ? "Setting up your business…" : "Try it with a demo business"}
             </button>
             <p className="quiet small">
-              You get your own made-up plumbing business with six months of history. Nothing is real: no one is emailed, and it expires after {platform.demo.ttlDays} days.
+              You get your own made-up plumbing business with six months of jobs, payments and bank statements. Nothing is real: no one is emailed, no money moves, and it expires after {platform.demo.ttlDays} days.
             </p>
             <ErrorText error={error} />
           </div>
@@ -76,19 +79,50 @@ export function Home({ platform }: { platform: Platform }) {
 
       <section aria-labelledby="try">
         <h2 id="try">What to try</h2>
-        <ol className="try">
-          {TRY.map((t) => (
-            <li key={t.what}>
-              <strong>{t.what}</strong>
-              <span className="quiet">{t.how}</span>
-            </li>
-          ))}
-        </ol>
+        <div className="acts">
+          <div>
+            <h3 className="act"><span>Act 1</span> Run the business</h3>
+            <ol className="try">
+              {ACT_1.map((t) => (
+                <li key={t.what}>
+                  <strong>{t.what}</strong>
+                  <span className="quiet">{t.how}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+          <div>
+            <h3 className="act"><span>Act 2</span> Turn that record into a funding decision</h3>
+            <ol className="try" start={ACT_1.length + 1}>
+              {ACT_2.map((t) => (
+                <li key={t.what}>
+                  <strong>{t.what}</strong>
+                  <span className="quiet">{t.how}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </div>
         {platform.demo?.underwriterKey && (
           <p className="small quiet">
             Underwriter console: <a href="/underwriting">/underwriting</a> with the demo key <code>{platform.demo.underwriterKey}</code> (it only sees demo businesses).
           </p>
         )}
+      </section>
+
+      <section aria-labelledby="formula" data-tour="formula">
+        <h2 id="formula">How the funding score works</h2>
+        <p>
+          Eight measures come from the bank statement: true monthly revenue, its trend and volatility, the balance cushion, negative-balance days,
+          overdraft fees, existing debt and time in business. Each earns part of its weight:
+        </p>
+        <p className="formula big"><code>score = Σ weightᵢ × curveᵢ(measureᵢ)</code></p>
+        <p>
+          The score sets a band (A–D). Automatic stops can decline or send a case to a person first. An offer is the smallest of what was asked, a multiple of monthly
+          revenue, and what keeps all lender payments within 15% of a day's sales, with an estimated APR shown next to it.
+        </p>
+        <p><a href="/scoring" className="button secondary">Every formula, curve and source →</a></p>
+        <p className="small quiet">A demonstration of an underwriting engine on synthetic data. No real credit is offered.</p>
       </section>
 
       <section aria-labelledby="flow" data-tour="diagrams">
@@ -119,7 +153,7 @@ export function Home({ platform }: { platform: Platform }) {
 
       <Guide page="home" auto={!!platform.demo} />
       <footer className="small quiet">
-        All businesses, customers and bank statements here are synthetic. Funding decisions are a demonstration, not an offer of credit.
+        All businesses, customers and bank statements here are synthetic. Funding decisions demonstrate an underwriting engine; no real credit is offered.
         {platform.author && <> Built by {platform.author}.</>}
         {platform.repoUrl && <> <a href={platform.repoUrl}>Source code</a>.</>}
       </footer>

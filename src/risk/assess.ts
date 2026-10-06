@@ -55,7 +55,8 @@ const usd = (c: number) => `$${Math.round(c / 100).toLocaleString("en-US")}`;
 const pctInt = (x: number) => `${Math.round(x * 100)}%`;
 
 /** Missing data scores neutral (0.5) instead of zero, and is named in the reasons. */
-const NEUTRAL = 0.5;
+/** Fraction of its weight a metric earns when the statements can't measure it. */
+export const NEUTRAL = 0.5;
 
 export function assess(app: FundingApplication, txns: BankTransaction[], now = new Date()): Assessment {
   const { metrics, facts } = computeMetrics(app, txns);

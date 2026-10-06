@@ -38,7 +38,7 @@ export function Dashboard() {
         <div className="tenant">{site?.name ?? " "}</div>
         <nav aria-label="Sections">
           {SECTIONS.map((s) => (
-            <a key={s.id} href={`#/${s.id}`} aria-current={s.id === section ? "page" : undefined}>
+            <a key={s.id} href={`#/${s.id}`} aria-current={s.id === section ? "page" : undefined} data-tour={`nav-${s.id}`}>
               {s.name}
             </a>
           ))}

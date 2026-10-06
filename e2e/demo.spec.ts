@@ -6,8 +6,10 @@ test("Try it: a visitor gets a lived-in demo business and can act as the underwr
   await expect(page.getByRole("heading", { level: 1 })).toContainText("small business");
   await page.getByRole("button", { name: /Try it/ }).click();
 
-  await page.waitForURL(/demo-[0-9a-f]{6}\.lvh\.me:3100\/app#\/leads$/); // the key left the address bar
+  await page.waitForURL(/demo-[0-9a-f]{6}\.lvh\.me:3100\/app#\/insights$/); // opens on the numbers; the key left the address bar
   await expect(page.getByLabel("Demo business")).toContainText("made up");
+  await expect(page.locator(".kpi", { hasText: "Paid to you" })).toContainText("$");
+  await page.getByRole("link", { name: "Leads" }).click();
   await expect(page.getByRole("row", { name: /Jordan Ellis/ }).getByRole("button", { name: "Draft estimate" })).toBeVisible();
   await expect(page.getByRole("row", { name: /Tom Okafor/ }).getByText("Invoiced")).toBeVisible(); // done jobs aren't re-drafted
 

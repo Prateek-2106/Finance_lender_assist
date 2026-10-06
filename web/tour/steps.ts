@@ -16,20 +16,25 @@ export interface Step {
 export const TOURS: Record<PageId, Step[]> = {
   home: [
     {
-      title: "One platform for a small business",
-      body: "A plumber, a bakery or a salon gets a website, quotes, invoices and payments here, and can ask for working capital without filling in a loan form. The funding decision comes from their bank statements.",
+      title: "Run a business, then see what it can borrow",
+      body: "Act 1: a plumber runs their business here: website, AI-drafted quotes, invoices, payments, and a dashboard that adds it all up. Act 2: because the platform sees how the business earns, it can make a funding decision from evidence.",
       target: "hero",
     },
     {
       title: "Get your own business to try",
-      body: "This makes a made-up plumbing business just for you, with six months of customers, jobs and bank statements. Nothing is real and nobody gets emailed.",
+      body: "This makes a made-up plumbing business just for you, with six months of jobs, payments and bank statements. Nothing is real, nobody gets emailed, and no money moves.",
       target: "try",
       advanceOnClick: true,
       what: "button",
     },
     {
-      title: "Or read how it works first",
-      body: "These diagrams show every feature, and who sends what to whom. Each step has a short explanation.",
+      title: "The funding formula, in the open",
+      body: "Eight measures from the bank statement, a weighted score, bands, automatic stops and an affordability-capped offer. The full page shows every curve and its sources.",
+      target: "formula",
+    },
+    {
+      title: "How it fits together",
+      body: "These diagrams show every feature, and who sends what to whom.",
       target: "diagrams",
     },
   ],
@@ -51,12 +56,7 @@ export const TOURS: Record<PageId, Step[]> = {
 
   leads: [
     {
-      title: "This is your business",
-      body: "You're the owner of Maple Street Plumbing. Everything here is made up, so click anything. Press \"What's this page?\" any time to see this again.",
-      target: "demo-banner",
-    },
-    {
-      title: "Customers asking for work",
+      title: "Where the numbers start",
       body: "Every request from the website or by text message lands here. Returning customers are recognised by their email or phone.",
       target: "leads-table",
     },
@@ -104,8 +104,8 @@ export const TOURS: Record<PageId, Step[]> = {
 
   funding: [
     {
-      title: "Working capital, from bank statements",
-      body: "The business asks for money and uploads a bank statement. No credit check, no long form: the decision comes from how money actually moves through the account.",
+      title: "Act 2: the record becomes evidence",
+      body: "The work in Act 1 left a trail in the bank account. Here the business asks for working capital, and the decision comes from that trail: how money actually comes in, stays and goes out.",
       target: "funding-table",
     },
     {
@@ -123,14 +123,15 @@ export const TOURS: Record<PageId, Step[]> = {
     },
     {
       title: "How it was scored",
-      body: "Open this to see each measure: true monthly revenue, steadiness, negative balance days, existing loans and more, with the business's number for each.",
+      body: "Open this to see the score bar: one segment per measure, filled to what it earned, with the reasons citing each measure.",
       target: "how-decided",
       whenMissing: "Open an assessed application to see how it was scored.",
     },
     {
-      title: "Try your own",
-      body: "Start a new application and upload a CSV bank statement (sample files are in the repo under fixtures/statements).",
-      target: "new-application",
+      title: "The formula behind it",
+      body: "Every measure, curve, threshold and source, generated from the engine's own settings. A demonstration on synthetic data: no real credit is offered.",
+      target: "how-scored",
+      whenMissing: "Open an assessed application; the link sits under its answer.",
     },
     {
       title: "Switch sides",
@@ -143,19 +144,31 @@ export const TOURS: Record<PageId, Step[]> = {
 
   insights: [
     {
-      title: "What happened after \"paid\"",
-      body: "Money in, the average job, how long customers take to pay, and what's still owed.",
+      title: "This is your business",
+      body: "You own Maple Street Plumbing. Everything is made up, so click anything. Press \"What's this page?\" any time to see this again.",
+      target: "demo-banner",
+    },
+    {
+      title: "What the work added up to",
+      body: "Money paid to you, the average job, how long customers take to pay, and what's still owed. Nobody typed these in: they come from every quote, invoice and payment.",
       target: "kpis",
     },
     {
       title: "From request to payment",
-      body: "How many leads became quotes, how many were accepted, how many got paid, and repeat customers.",
+      body: "How many requests became quotes, how many were accepted, how many got paid, and how many customers came back.",
       target: "funnel",
     },
     {
       title: "Every email",
       body: "Each stage writes an email. Press View on one to read it. In a demo nothing is sent.",
       target: "emails",
+    },
+    {
+      title: "See where the numbers come from",
+      body: "Open Leads and win the next job: the AI drafts the quote, you approve it, and these numbers move when it's paid.",
+      target: "nav-leads",
+      advanceOnClick: true,
+      what: "link",
     },
   ],
 
@@ -175,7 +188,7 @@ export const TOURS: Record<PageId, Step[]> = {
     },
     {
       title: "Why it's here",
-      body: "The score, the band, and the rule that sent it to a person, each pointing at the measure (M1–M8) it comes from.",
+      body: "The score, the band, and the rule that sent it to a person, each pointing at the measure (M1–M8) it comes from. \"How is this scored?\" opens every formula.",
       target: "risk",
       whenMissing: "Click a case in the queue to open it.",
     },
