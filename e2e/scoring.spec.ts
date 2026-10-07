@@ -4,7 +4,6 @@ import { METRIC_CONFIG, SCORECARD_VERSION } from "../src/risk/config";
 test("the funding formula is public, matches the engine, and is one click from any score", async ({ page, context }) => {
   // From the homepage
   await page.goto("http://localhost:3100/");
-  await page.getByRole("button", { name: "Close the walkthrough" }).click().catch(() => {});
   await expect(page.getByRole("heading", { name: "How the funding score works" })).toBeVisible();
   await page.getByRole("link", { name: /Every formula, curve and source/ }).click();
   await expect(page.getByRole("heading", { level: 1, name: "How funding decisions are made" })).toBeVisible();
@@ -21,10 +20,8 @@ test("the funding formula is public, matches the engine, and is one click from a
   // From a business's funding answer, next to the score
   await page.goto("http://localhost:3100/");
   await page.getByRole("button", { name: /Try it/ }).click();
-  await page.waitForURL(/demo-.*\/app#\/insights$/);
-  await page.getByRole("button", { name: "Close the walkthrough" }).click().catch(() => {});
+  await page.waitForURL(/demo-.*\/app#\/requests$/);
   await page.getByRole("link", { name: "Funding" }).click();
-  await page.getByRole("button", { name: "Close the walkthrough" }).click().catch(() => {});
   await page.locator("[data-tour=funding-table] tbody tr").filter({ hasText: "Declined" }).click();
   const [explainer] = await Promise.all([context.waitForEvent("page"), page.getByRole("link", { name: /How every application is scored/ }).click()]);
   await expect(explainer.getByRole("heading", { level: 1 })).toHaveText("How funding decisions are made");

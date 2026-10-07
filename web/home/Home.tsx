@@ -25,9 +25,9 @@ export type Platform = {
 
 // Act 1 is running the business; act 2 is what that record makes possible.
 const ACT_1 = [
-  { what: "See the numbers first", how: "Your demo opens on Insights: six months of jobs turned into money paid, average job, days to pay, unpaid invoices and repeat customers. Nothing here is typed in; it all comes from the work below." },
-  { what: "Win the next job", how: "Under Leads, open the newest request (Jordan, leaking water heater) and press Draft estimate. The AI picks items from the price list; prices always come from the list, and you approve before the customer sees anything." },
-  { what: "Get paid", how: "Send the estimate, mark it accepted, create the invoice, record the payment. Each stage writes its email (open them under Insights → Emails), and the numbers update." },
+  { what: "Win the next job", how: "Your demo opens on Requests: take the newest one (Jordan, leaking water heater) and press Draft estimate. The AI picks items from the price list; prices always come from the list, and you approve before the customer sees anything." },
+  { what: "Get paid", how: "Send the estimate, mark it accepted, create the invoice, record the payment. Each stage writes its email (open them under Statistics → Emails), and the numbers update." },
+  { what: "See the numbers", how: "Statistics turns six months of jobs into gross income, average job, days to pay, unpaid invoices and repeat customers. Click any number to see the jobs and invoices behind it." },
 ];
 const ACT_2 = [
   { what: "Ask what you qualify for", how: "Funding shows three applications scored from bank statements: one approved, one declined, one waiting for a person. Each answer is in plain words, with an estimated APR and what would help next time." },
@@ -39,7 +39,7 @@ const BUILT = [
   ["Node + Express + MongoDB Atlas", "Multi-tenant REST API; the business comes from the web address"],
   ["Risk engine", "Bank-statement parsing, 8 measures, automatic stops, scorecard bands, affordability-capped offers (see How the funding score works)"],
   ["Claude (capped)", "Drafts quotes and underwriting memos; every claim is checked against the numbers before anyone sees it"],
-  ["Twilio + SES", "Leads by text message; an email at every stage"],
+  ["Twilio + SES", "Requests by text message; an email at every stage"],
   ["AWS", "CloudFront, EC2 + ECR, Route 53, ACM, SES, SSM, defined in CDK; GitHub Actions deploys on push"],
   ["Tests", "Vitest unit, contract and HTTP tests; Playwright end to end"],
 ];
@@ -165,7 +165,7 @@ export function Home({ platform }: { platform: Platform }) {
         </table>
       </section>
 
-      <Guide page="home" auto={!!platform.demo} />
+      <Guide page="home" />
       <footer className="small quiet">
         All businesses, customers and bank statements here are synthetic. Funding decisions demonstrate an underwriting engine; no real credit is offered.
         {platform.author && <> Built by {platform.author}.</>}

@@ -3,11 +3,11 @@ import type { Customer, Estimate, Lead } from "../../src/domain";
 import { api, day } from "../api";
 import { ErrorText, Status } from "../ui/bits";
 
-export function Leads({ go }: { go: (path: string) => void }) {
+export function Requests({ go }: { go: (path: string) => void }) {
   const [leads, setLeads] = useState<Lead[] | null>(null);
   const [drafting, setDrafting] = useState<string | null>(null);
   const [customers, setCustomers] = useState<Map<string, Customer>>(new Map());
-  const [latest, setLatest] = useState<Map<string, Estimate>>(new Map()); // newest estimate per lead
+  const [latest, setLatest] = useState<Map<string, Estimate>>(new Map()); // newest estimate per request
   const [error, setError] = useState<unknown>(null);
   const [noPrices, setNoPrices] = useState(false);
 
@@ -37,7 +37,7 @@ export function Leads({ go }: { go: (path: string) => void }) {
 
   return (
     <>
-      <h2>Leads</h2>
+      <h2>Requests</h2>
       {noPrices && (
         <p className="notice small" role="note">
           <strong>Add your price list first.</strong> The AI drafts quotes only from your items and prices. <a href="#/prices">Add items and services →</a>
@@ -45,10 +45,10 @@ export function Leads({ go }: { go: (path: string) => void }) {
       )}
       <ErrorText error={error} />
       {leads && leads.length === 0 && (
-        <p className="empty">No leads yet. Share your website link, or text your business number, and new requests show up here.</p>
+        <p className="empty">No requests yet. Share your website link, or text your business number, and new requests show up here.</p>
       )}
       {leads && leads.length > 0 && (
-        <table data-tour="leads-table">
+        <table className="cards" data-tour="leads-table">
           <thead>
             <tr>
               <th>From</th>
@@ -60,7 +60,7 @@ export function Leads({ go }: { go: (path: string) => void }) {
           <tbody>
             {leads.map((l) => (
               <tr key={l.id}>
-                <td>
+                <td data-label="From">
                   <div>
                     {l.name}
                     {l.customerId && (customers.get(l.customerId)?.leadCount ?? 0) > 1 && (
@@ -69,8 +69,8 @@ export function Leads({ go }: { go: (path: string) => void }) {
                   </div>
                   <div className="quiet small">{l.phone ?? l.email}{l.source === "sms" ? " (text)" : ""}</div>
                 </td>
-                <td style={{ maxWidth: "36rem" }}>{l.message}</td>
-                <td className="quiet small">{day(l.createdAt)}</td>
+                <td style={{ maxWidth: "36rem" }} data-label="Request">{l.message}</td>
+                <td className="quiet small" data-label="Received">{day(l.createdAt)}</td>
                 <td className="num">
                   {latest.has(l.id) ? (
                     <a href={`#/estimates/${latest.get(l.id)!.id}`} className="small" data-tour="lead-status" aria-label={`Open estimate for ${l.name}`}>

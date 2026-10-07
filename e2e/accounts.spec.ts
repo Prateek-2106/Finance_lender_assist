@@ -31,11 +31,11 @@ test("create an account with a password, confirm the email, run a business, rese
   await expect(page.getByRole("status")).toContainText("Riverside Electric is ready");
   await page.getByRole("link", { name: "Open the dashboard" }).click();
   await page.waitForURL(/riverside-electric\.lvh\.me:3100\/app/);
-  await expect(page.getByRole("heading", { name: "Leads" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Requests" })).toBeVisible();
   // A new business is pointed at its price list before anything else
   await page.getByRole("link", { name: "Add items and services →" }).click();
   await expect(page.getByRole("heading", { name: "Price list" })).toBeVisible();
-  await page.goto("http://riverside-electric.lvh.me:3100/app#/leads");
+  await page.goto("http://riverside-electric.lvh.me:3100/app#/requests");
 
   // Sign out, then back in with the password
   await page.getByRole("button", { name: "Sign out" }).click();
@@ -48,7 +48,7 @@ test("create an account with a password, confirm the email, run a business, rese
   await page.getByLabel("Password", { exact: true }).fill(pw);
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL(/riverside-electric\.lvh\.me:3100\/app/); // back where they started
-  await expect(page.getByRole("heading", { name: "Leads" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Requests" })).toBeVisible();
 
   // Forgot password
   await page.context().clearCookies();
@@ -60,4 +60,44 @@ test("create an account with a password, confirm the email, run a business, rese
   await page.getByRole("button", { name: "Save and sign in" }).click();
   await page.waitForURL("http://lvh.me:3100/account");
   await expect(page.getByTestId("businesses")).toContainText("Riverside Electric");
+});
+
+test("signing in before confirming the email says the password was right, and finishes after the code", async ({ page }) => {
+  const email = `later-${Date.now()}@example.test`;
+  const pw = "confirm it later 2026";
+  await page.goto("http://lvh.me:3100/signup");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(pw);
+  await page.getByRole("button", { name: "Create account" }).click();
+  await page.waitForURL(/\/verify\?email=/);
+
+  // They leave without confirming, then come back to sign in
+  await page.goto("http://lvh.me:3100/signin");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(pw);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.waitForURL(/\/verify\?email=.*from=signin/);
+  await expect(page.getByRole("status")).toContainText("Your password is right");
+  await page.getByLabel("Code").fill(await latestCode(page, email));
+  await page.getByRole("button", { name: "Confirm" }).click();
+  await page.waitForURL("http://lvh.me:3100/account");
+  await expect(page.getByText(`Signed in as ${email}`)).toBeVisible();
+});
+
+test("sign-in never redirects to another site", async ({ page }) => {
+  const email = `next-${Date.now()}@example.test`;
+  await page.goto("http://lvh.me:3100/signup");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill("no open redirects 2026");
+  await page.getByRole("button", { name: "Create account" }).click();
+  await page.waitForURL(/\/verify/);
+  await page.getByLabel("Code").fill(await latestCode(page, email));
+  await page.getByRole("button", { name: "Confirm" }).click();
+  await expect(page.getByText(`Signed in as ${email}`)).toBeVisible(); // the page has finished loading
+  await page.context().clearCookies();
+  await page.goto(`http://lvh.me:3100/signin?next=${encodeURIComponent("https://evil.example/")}`);
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password", { exact: true }).fill("no open redirects 2026");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.waitForURL("http://lvh.me:3100/account");
 });

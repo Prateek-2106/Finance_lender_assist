@@ -1,9 +1,12 @@
 import type { Id } from "../domain";
 import type { Repos } from "../repos/types";
 
-const SENT = new Set(["sent", "accepted", "declined", "invoiced"]);
-const WON = new Set(["accepted", "invoiced"]);
-const DAY = 86_400_000;
+// Shared with insightSources.ts, so a number and the list behind it can never disagree.
+export const SENT = new Set(["sent", "accepted", "declined", "invoiced"]);
+export const WON = new Set(["accepted", "invoiced"]);
+export const DAY = 86_400_000;
+export const monthOf = (d: Date | string) => new Date(d).toISOString().slice(0, 7);
+export const daysToPay = (i: { createdAt: Date; paidAt?: Date }) => Math.round(((new Date(i.paidAt!).getTime() - new Date(i.createdAt).getTime()) / DAY) * 10) / 10;
 
 /**
  * What happens after "payment recorded": the pipeline's history, read back as numbers
@@ -26,20 +29,24 @@ export async function insights(repos: Repos, tenantId: Id, now = new Date()) {
   };
   const rate = (a: number, b: number) => (b ? Math.round((a / b) * 1000) / 10 : null);
 
-  const months: { month: string; revenueCents: number; invoices: number }[] = [];
+  // Gross income: what customers paid for the work, before sales tax (tax is collected for the state, not earned).
+  const months: { month: string; revenueCents: number; grossCents: number; taxCents: number; invoices: number }[] = [];
   for (let k = 5; k >= 0; k--) {
     const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - k, 1));
-    months.push({ month: d.toISOString().slice(0, 7), revenueCents: 0, invoices: 0 });
+    months.push({ month: d.toISOString().slice(0, 7), revenueCents: 0, grossCents: 0, taxCents: 0, invoices: 0 });
   }
   for (const i of paid) {
-    const m = months.find((x) => x.month === new Date(i.paidAt!).toISOString().slice(0, 7));
+    const m = months.find((x) => x.month === monthOf(i.paidAt!));
     if (m) {
       m.revenueCents += i.totals.totalCents;
+      m.grossCents += i.totals.subtotalCents;
+      m.taxCents += i.totals.taxCents;
       m.invoices++;
     }
   }
   const revenue = paid.reduce((s, i) => s + i.totals.totalCents, 0);
-  const daysToPay = paid.map((i) => (new Date(i.paidAt!).getTime() - new Date(i.createdAt).getTime()) / DAY);
+  const gross = paid.reduce((s, i) => s + i.totals.subtotalCents, 0);
+  const days = paid.map(daysToPay);
   const open = invoices.filter((i) => i.status === "open");
 
   return {
@@ -50,9 +57,11 @@ export async function insights(repos: Repos, tenantId: Id, now = new Date()) {
       acceptedToPaidPercent: rate(funnel.paid, funnel.accepted),
     },
     revenue: {
-      paidCents: revenue,
-      averageJobCents: paid.length ? Math.round(revenue / paid.length) : null,
-      averageDaysToPay: daysToPay.length ? Math.round((daysToPay.reduce((a, b) => a + b, 0) / daysToPay.length) * 10) / 10 : null,
+      paidCents: revenue, // everything received, sales tax included
+      grossCents: gross, // gross income: before sales tax
+      taxCollectedCents: revenue - gross,
+      averageJobCents: paid.length ? Math.round(gross / paid.length) : null, // before tax, like gross income
+      averageDaysToPay: days.length ? Math.round((days.reduce((a, b) => a + b, 0) / days.length) * 10) / 10 : null,
       outstandingCents: open.reduce((s, i) => s + i.totals.totalCents, 0),
       outstandingInvoices: open.length,
       byMonth: months,

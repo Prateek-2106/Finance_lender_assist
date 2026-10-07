@@ -195,7 +195,7 @@ a.button.secondary { background: transparent; color: var(--action); }
   position: fixed; right: 1rem; bottom: 1rem; z-index: 20; display: inline-flex; align-items: center; gap: 0.45rem;
   border-radius: 999px; padding: 0.5rem 0.9rem 0.5rem 0.5rem; box-shadow: 0 4px 16px rgb(18 52 59 / 0.18);
 }
-.tour-launch span { display: inline-grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: 50%; background: var(--action-ink); color: var(--action); font-weight: 800; }
+.tour-launch span[aria-hidden="true"] { display: inline-grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: 50%; background: var(--action-ink); color: var(--action); font-weight: 800; }
 .tour-ring {
   position: fixed; z-index: 19; pointer-events: none; border-radius: 8px;
   box-shadow: 0 0 0 3px var(--review), 0 0 0 9px rgb(183 121 31 / 0.18);
@@ -280,3 +280,60 @@ code.key { display: block; word-break: break-all; background: var(--paper); bord
 .facts { display: grid; grid-template-columns: max-content 1fr; gap: 0.35rem 1.25rem; margin: 0; }
 .facts dt { color: var(--ink-2); font-size: var(--step--1); padding-top: 0.1rem; }
 .facts dd { margin: 0; font-variant-numeric: tabular-nums; }
+
+/* Statistics: every number is a link to the records behind it */
+a.kpi { display: block; color: var(--ink); text-decoration: none; }
+a.kpi:hover { border-color: var(--action); }
+a.kpi .l::after { content: " →"; color: var(--action); }
+a.kpi:hover .l { color: var(--action); text-decoration: underline; }
+a.funnel-row { color: var(--ink); text-decoration: none; border-radius: 4px; }
+a.funnel-row:hover span:first-child { color: var(--action); text-decoration: underline; }
+a.bar { display: block; }
+.panel, .panel > *, main > * { min-width: 0; }
+
+/* ── phones ─────────────────────────────────────────── */
+@media (max-width: 820px) {
+  /* business name and Sign out on one line, the sections in a single scrollable row under them */
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .rail { min-width: 0; }
+  .rail nav { order: 3; flex: 1 1 100%; min-width: 0; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .rail nav a { white-space: nowrap; }
+}
+@media (max-width: 480px) {
+  .rail nav { justify-content: space-between; gap: 0; }
+  .rail nav a { font-size: 0.8125rem; padding: 0.4rem 0.45rem; }
+  main { padding-bottom: 5rem; } /* room for the help button */
+}
+@media (max-width: 640px) {
+  td, th { padding: 0.45rem 0.35rem; }
+  table { font-size: var(--step--1); }
+  .hide-sm { display: none; }
+  .tour-launch { padding: 0.5rem; }
+  .tour-launch .label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .kpi .v { font-size: var(--step-1); }
+  .strip-labels { font-size: 0.65rem; }
+
+  /* Tables marked .cards become one card per row, each value labelled */
+  table.cards, table.cards tbody, table.cards tr, table.cards td { display: block; width: 100%; }
+  table.cards thead { display: none; }
+  table.cards tr { border: 1px solid var(--rule); border-radius: var(--radius); padding: 0.5rem 0.75rem; margin-bottom: 0.6rem; background: var(--surface); }
+  table.cards td { border: none; padding: 0.2rem 0; text-align: left; max-width: none !important; }
+  table.cards td[data-label]::before { content: attr(data-label); display: block; font-size: 0.7rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-2); }
+  table.cards td.num { text-align: left; }
+  table.cards tfoot { display: block; }
+  table.cards tfoot tr { display: flex; justify-content: space-between; border: none; background: none; padding: 0.25rem 0; }
+  table.cards tfoot td { width: auto; }
+
+  /* Price list: each item is a small form */
+  .price-table thead { display: none; }
+  .price-table, .price-table tbody { display: block; }
+  .price-table tr { display: grid; grid-template-columns: 1fr 1fr auto; grid-template-areas: "name name remove" "price unit parts" "code code code"; gap: 0.4rem; padding: 0.6rem 0; border-bottom: 1px solid var(--rule); }
+  .price-table td { padding: 0; border: none; }
+  .price-table td:nth-child(1) { grid-area: name; }
+  .price-table td:nth-child(2) { grid-area: price; }
+  .price-table td:nth-child(3) { grid-area: unit; }
+  .price-table td:nth-child(4) { grid-area: parts; display: flex; align-items: center; gap: 0.3rem; }
+  .price-table td:nth-child(5) { grid-area: code; }
+  .price-table td:nth-child(6) { grid-area: remove; }
+  .price-table td:nth-child(4)::after { content: "Parts OK"; font-size: var(--step--1); color: var(--ink-2); }
+}

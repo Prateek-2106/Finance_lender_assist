@@ -1,5 +1,5 @@
 // What the walkthrough says on each page. Targets are data-tour="…" names on the page's elements.
-export type PageId = "home" | "site" | "leads" | "estimates" | "prices" | "funding" | "insights" | "underwriting";
+export type PageId = "home" | "site" | "requests" | "estimates" | "prices" | "funding" | "statistics" | "underwriting";
 
 export interface Step {
   title: string;
@@ -47,14 +47,14 @@ export const TOURS: Record<PageId, Step[]> = {
     },
     {
       title: "Send a request",
-      body: "Fill it in and press Request a quote. It arrives in the owner's dashboard as a lead, and the customer gets a confirmation email.",
+      body: "Fill it in and press Request a quote. It arrives in the owner's dashboard under Requests, and the customer gets a confirmation email.",
       target: "site-submit",
       advanceOnClick: true,
       what: "button",
     },
   ],
 
-  leads: [
+  requests: [
     {
       title: "Where the numbers start",
       body: "Every request from the website or by text message lands here. Returning customers are recognised by their email or phone.",
@@ -64,13 +64,13 @@ export const TOURS: Record<PageId, Step[]> = {
       title: "Let AI draft the quote",
       body: "Press Draft estimate on a new request. The AI picks items and quantities from your price list; prices always come from the list, and you check it before the customer sees anything.",
       target: "draft",
-      whenMissing: "Every lead already has an estimate. Use Estimates on the left to open one.",
+      whenMissing: "Every request already has an estimate. Use Estimates to open one.",
       advanceOnClick: true,
       what: "button",
     },
     {
       title: "Already quoted",
-      body: "Leads you've quoted show where the estimate stands. Click one to open it.",
+      body: "Requests you've quoted show where the estimate stands. Click one to open it.",
       target: "lead-status",
     },
   ],
@@ -80,7 +80,7 @@ export const TOURS: Record<PageId, Step[]> = {
       title: "Every quote and where it stands",
       body: "Needs review → draft → sent → accepted → invoiced. Click any row to open it.",
       target: "estimates-table",
-      whenMissing: "No estimates yet. Go to Leads and press Draft estimate.",
+      whenMissing: "No estimates yet. Go to Requests and press Draft estimate.",
     },
     {
       title: "The quote",
@@ -90,7 +90,7 @@ export const TOURS: Record<PageId, Step[]> = {
     },
     {
       title: "Move it along",
-      body: "Approve it, send it to the customer, mark it accepted, then create the invoice. Each step emails the customer (in a demo the emails are kept under Insights, not sent).",
+      body: "Approve it, send it to the customer, mark it accepted, then create the invoice. Each step emails the customer (in a demo the emails are kept under Statistics, not sent).",
       target: "estimate-actions",
       whenMissing: "Open a draft or sent estimate to see the next step for it.",
     },
@@ -155,15 +155,10 @@ export const TOURS: Record<PageId, Step[]> = {
     },
   ],
 
-  insights: [
-    {
-      title: "This is your business",
-      body: "You own Maple Street Plumbing. Everything is made up, so click anything. Press \"What's this page?\" any time to see this again.",
-      target: "demo-banner",
-    },
+  statistics: [
     {
       title: "What the work added up to",
-      body: "Money paid to you, the average job, how long customers take to pay, and what's still owed. Nobody typed these in: they come from every quote, invoice and payment.",
+      body: "Gross income, the average job, how long customers take to pay, and what's still owed. Nobody typed these in: click any of them to see the invoices and requests behind it.",
       target: "kpis",
     },
     {
@@ -178,8 +173,8 @@ export const TOURS: Record<PageId, Step[]> = {
     },
     {
       title: "See where the numbers come from",
-      body: "Open Leads and win the next job: the AI drafts the quote, you approve it, and these numbers move when it's paid.",
-      target: "nav-leads",
+      body: "Open Requests and win the next job: the AI drafts the quote, you approve it, and these numbers move when it's paid.",
+      target: "nav-requests",
       advanceOnClick: true,
       what: "link",
     },

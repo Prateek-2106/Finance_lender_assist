@@ -17,17 +17,17 @@ const items = [
 ];
 
 describe("emails at each stage", () => {
-  it("a quote request emails the customer a confirmation and the owner a new-lead alert", async () => {
+  it("a quote request emails the customer a confirmation and the owner a new-request alert", async () => {
     const { app, joe, mail, emailsSettled, messages } = await setup();
     await request(app).post("/api/leads").set("Host", joe.host).send({ name: "Ann Lee", email: "ann@x.co", message: "Leaky heater" });
     await emailsSettled();
     expect(mail.sent.map((m) => [m.to, m.subject])).toEqual(
       expect.arrayContaining([
         ["ann@x.co", "We got your request - Joe's Plumbing"],
-        ["joe@joesplumbing.com", "New lead: Ann Lee"],
+        ["joe@joesplumbing.com", "New request: Ann Lee"],
       ]),
     );
-    expect(mail.sent.find((m) => m.to === "joe@joesplumbing.com")!.text).toContain("https://joes-plumbing.lvh.me/app#/leads");
+    expect(mail.sent.find((m) => m.to === "joe@joesplumbing.com")!.text).toContain("https://joes-plumbing.lvh.me/app#/requests");
     expect((await messages()).every((m) => m.status === "sent")).toBe(true);
   });
 

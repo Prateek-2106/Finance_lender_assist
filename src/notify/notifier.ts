@@ -97,7 +97,7 @@ export class Notifier {
   leadReceived(t: Tenant, lead: Lead) {
     return Promise.all([
       this.deliver(t, "lead_received_customer", lead.email, lead.id, async () => templates.leadReceivedCustomer(t, lead)),
-      this.deliver(t, "lead_received_owner", t.ownerEmail, lead.id, async () => templates.leadReceivedOwner(t, lead, tenantUrl(this.config, t, "/app#/leads"))),
+      this.deliver(t, "lead_received_owner", t.ownerEmail, lead.id, async () => templates.leadReceivedOwner(t, lead, tenantUrl(this.config, t, "/app#/requests"))),
     ]);
   }
 

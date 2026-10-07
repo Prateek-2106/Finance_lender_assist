@@ -28,13 +28,13 @@ export function Funding({ selected, go }: { selected?: string; go: (path: string
         <div>
           {list && list.length === 0 && <p className="empty">No applications yet. Start one to see what your business could get.</p>}
           {list && list.length > 0 && (
-            <table data-tour="funding-table">
+            <table className="cards" data-tour="funding-table">
               <thead><tr><th>Started</th><th className="num">Asked for</th><th>Status</th></tr></thead>
               <tbody>
                 {list.map((a) => (
                   <tr key={a.id} className={`clickable${a.id === selected ? " selected" : ""}`} onClick={() => go(`funding/${a.id}`)}>
-                    <td>{day(a.createdAt)}<div className="quiet small">{a.industry}</div></td>
-                    <td className="num">{money(a.amountRequestedCents)}</td>
+                    <td data-label="Started">{day(a.createdAt)}<div className="quiet small">{a.industry}</div></td>
+                    <td className="num" data-label="Asked for">{money(a.amountRequestedCents)}</td>
                     <td>
                       {a.decision ? (
                         <span className={`status ${OUTCOME_WORD[a.decision.outcome]}`}>{OUTCOME_LABEL[a.decision.outcome]}</span>

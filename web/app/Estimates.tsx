@@ -27,7 +27,7 @@ export function Estimates({ selected, go }: { selected?: string; go: (path: stri
     <>
       <h2>Estimates</h2>
       <ErrorText error={error} />
-      {list && list.length === 0 && <p className="empty">No estimates yet. Draft one from a lead.</p>}
+      {list && list.length === 0 && <p className="empty">No estimates yet. Draft one from a request.</p>}
       {list && list.length > 0 && (
         <div className="split">
           <table data-tour="estimates-table">
@@ -147,7 +147,7 @@ function EstimateDetail({ id, onChange }: { id: string; onChange: () => void }) 
           <tr>
             <th>Item</th>
             <th className="num">Qty</th>
-            <th className="num">Unit</th>
+            <th className="num hide-sm">Unit</th>
             <th className="num">Amount</th>
           </tr>
         </thead>
@@ -159,22 +159,22 @@ function EstimateDetail({ id, onChange }: { id: string; onChange: () => void }) 
                 {editable ? (
                   <input
                     aria-label={`Quantity for ${li.description}`}
-                    type="number" min={li.fractional ? 0.25 : 1} step={li.fractional ? 0.25 : 1} value={li.quantity} style={{ width: "5rem", textAlign: "right" }}
+                    type="number" min={li.fractional ? 0.25 : 1} step={li.fractional ? 0.25 : 1} value={li.quantity} style={{ width: "4.25rem", textAlign: "right" }}
                     onChange={(ev) => setItems(items.map((x, j) => (j === i ? { ...x, quantity: Number(ev.target.value) } : x)))}
                   />
                 ) : (
                   li.quantity
                 )}
               </td>
-              <td className="num">{money(li.unitPriceCents)}</td>
+              <td className="num hide-sm">{money(li.unitPriceCents)}</td>
               <td className="num">{money(Math.round(li.quantity * li.unitPriceCents))}</td>
             </tr>
           ))}
         </tbody>
         <tfoot>
-          <tr><td colSpan={3}>Subtotal</td><td className="num">{money(e.totals.subtotalCents)}</td></tr>
-          <tr><td colSpan={3}>Tax ({(e.taxRateBps / 100).toFixed(2)}%)</td><td className="num">{money(e.totals.taxCents)}</td></tr>
-          <tr className="grand"><td colSpan={3}>Total</td><td className="num">{money(e.totals.totalCents)}</td></tr>
+          <tr><td colSpan={2}>Subtotal</td><td className="hide-sm" /><td className="num">{money(e.totals.subtotalCents)}</td></tr>
+          <tr><td colSpan={2}>Tax ({(e.taxRateBps / 100).toFixed(2)}%)</td><td className="hide-sm" /><td className="num">{money(e.totals.taxCents)}</td></tr>
+          <tr className="grand"><td colSpan={2}>Total</td><td className="hide-sm" /><td className="num">{money(e.totals.totalCents)}</td></tr>
         </tfoot>
       </table>
       {e.notes && !e.aiDraft && <p className="quiet small" style={{ whiteSpace: "pre-line" }}>{e.notes}</p>}

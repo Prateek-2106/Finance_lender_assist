@@ -29,7 +29,7 @@ const SERIES = [
   { key: "signups", label: "Sign-ups" },
   { key: "demos", label: "Demos" },
   { key: "businesses", label: "New businesses" },
-  { key: "leads", label: "Leads" },
+  { key: "leads", label: "Requests" },
   { key: "aiCalls", label: "AI calls" },
   { key: "aiCostUsd", label: "AI cost" },
   { key: "emailsSent", label: "Emails" },
@@ -62,7 +62,7 @@ export function AdminPage() {
   return (
     <Frame title="Platform" wide>
       <div className="row" style={{ justifyContent: "space-between" }}>
-        <p className="quiet small">Last 14 days, UTC. Demo businesses and their sample leads are left out of business and lead counts.</p>
+        <p className="quiet small">Last 14 days, UTC. Demo businesses and their sample requests are left out of business and request counts.</p>
         <a className="small" href="/account">Your businesses</a>
       </div>
 
@@ -103,7 +103,7 @@ export function AdminPage() {
           <div className="table-wrap">
             <table style={{ marginTop: "0.5rem" }} data-testid="admin-days">
               <thead>
-                <tr><th>Day</th><th className="num">Sign-ups</th><th className="num">Demos</th><th className="num">Businesses</th><th className="num">Leads</th><th className="num">AI calls</th><th className="num">AI cost</th><th className="num">Emails</th><th className="num">Failed</th></tr>
+                <tr><th>Day</th><th className="num">Sign-ups</th><th className="num">Demos</th><th className="num">Businesses</th><th className="num">Requests</th><th className="num">AI calls</th><th className="num">AI cost</th><th className="num">Emails</th><th className="num">Failed</th></tr>
               </thead>
               <tbody>
                 {[...days].reverse().map((d) => (

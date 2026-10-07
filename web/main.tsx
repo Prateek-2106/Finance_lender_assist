@@ -23,7 +23,7 @@ function Root() {
 }
 
 const at = (p: string) => location.pathname === p || location.pathname.startsWith(`${p}/`);
-if (at("/app")) takeKeyFromHash(session, "#/insights"); // a demo opens on the numbers
+if (at("/app")) takeKeyFromHash(session, "#/requests"); // a demo opens where the work starts
 if (at("/underwriting")) takeKeyFromHash(uwSession, "#/");
 const page = at("/signin") ? <SignInPage /> : at("/signup") ? <SignUpPage /> : at("/verify") ? <VerifyPage /> : at("/forgot") ? <ForgotPage /> : at("/account") ? <AccountPage /> : at("/admin") ? <AdminPage /> : at("/scoring") ? <Scoring /> : at("/underwriting") ? <Console /> : at("/app") ? <Dashboard /> : <Root />;
 createRoot(document.getElementById("root")!).render(<StrictMode>{page}</StrictMode>);

@@ -40,7 +40,13 @@ export function takeKeyFromHash(store: ReturnType<typeof keyStore>, next = "#/")
 }
 
 export class ApiError extends Error {
-  constructor(message: string, readonly status: number, readonly issues?: { path?: string; line?: number; message: string }[]) {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly issues?: { path?: string; line?: number; message: string }[],
+    /** The whole JSON error body, for flags like needsVerification. */
+    readonly body?: Record<string, unknown>,
+  ) {
     super(message);
   }
 }
@@ -59,8 +65,8 @@ export async function api<T>(path: string, init: RequestInit & { json?: unknown;
   }
   const res = await fetch(`/api${path}`, { ...init, headers, body });
   if (!res.ok) {
-    const err = (await res.json().catch(() => ({}))) as { error?: string; issues?: ApiError["issues"] };
-    throw new ApiError(err.error ?? `Request failed (${res.status})`, res.status, err.issues);
+    const err = (await res.json().catch(() => ({}))) as { error?: string; issues?: ApiError["issues"] } & Record<string, unknown>;
+    throw new ApiError(err.error ?? `Request failed (${res.status})`, res.status, err.issues, err);
   }
   return (res.headers.get("content-type") ?? "").includes("json") ? ((await res.json()) as T) : (undefined as T);
 }

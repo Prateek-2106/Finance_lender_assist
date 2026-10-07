@@ -4,11 +4,13 @@ import { NotFoundError } from "../errors";
 import { getTenant, requireApiKey } from "../middleware/tenant";
 import { parseOrThrow, SettingsSchema } from "../schemas";
 import { insights } from "../services/insights";
+import { insightSources, SOURCE_KINDS } from "../services/insightSources";
+import { z } from "zod";
 
 /** The owner's view of their own business: settings, who they've emailed, customers, and how the pipeline is doing. */
 export function ownerRouter({ repos }: Deps) {
   const r = Router();
-  r.use(["/settings", "/messages", "/messages/:id", "/customers", "/insights"], requireApiKey);
+  r.use(["/settings", "/messages", "/messages/:id", "/customers", "/insights", "/insights/sources"], requireApiKey);
 
   r.get("/settings", (_req, res) => {
     const t = getTenant(res);
@@ -37,6 +39,17 @@ export function ownerRouter({ repos }: Deps) {
   });
   r.get("/insights", async (_req, res) => {
     res.json({ insights: await insights(repos, getTenant(res).id) });
+  });
+  // The records behind a number: ?kind=paid&month=2026-09, ?kind=requests&source=sms, ?kind=customers&returning=1 ...
+  const SourcesQuery = z.object({
+    kind: z.enum(SOURCE_KINDS),
+    month: z.string().optional(),
+    source: z.enum(["web", "sms"]).optional(),
+    returning: z.enum(["1", "true"]).optional(),
+  });
+  r.get("/insights/sources", async (req, res) => {
+    const q = parseOrThrow(SourcesQuery, req.query);
+    res.json({ sources: await insightSources(repos, getTenant(res).id, { kind: q.kind, month: q.month, source: q.source, returning: !!q.returning }) });
   });
   return r;
 }

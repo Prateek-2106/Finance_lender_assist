@@ -1,35 +1,38 @@
 import { test, expect } from "@playwright/test";
 
-test("the walkthrough guides without blocking, follows the visitor's clicks, and replays per page", async ({ page }) => {
+test("the walkthrough only opens when asked, guides without blocking, and follows the visitor's clicks", async ({ page }) => {
   await page.goto("http://localhost:3100/");
-  const card = page.getByRole("dialog", { name: /Run a business/ });
-  await expect(card).toContainText("1 of 4"); // starts by itself on the homepage
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await page.waitForTimeout(900);
+  await expect(page.getByRole("dialog")).toHaveCount(0); // never pops up by itself
+
+  await page.getByRole("button", { name: /What's this page/ }).click();
+  await expect(page.getByRole("dialog", { name: /Run a business/ })).toContainText("1 of 4");
   await page.getByRole("button", { name: "Next" }).click();
   await expect(page.getByRole("dialog")).toContainText("Get your own business");
   await page.getByRole("button", { name: /Try it/ }).click(); // doing the outlined thing
 
-  await page.waitForURL(/demo-.*\/app#\/insights$/); // act 1 opens on the numbers
-  const tour = page.getByRole("dialog", { name: "This is your business" });
-  await expect(tour).toContainText("1 of 5");
-  for (let i = 0; i < 4; i++) await page.getByRole("button", { name: "Next" }).click();
+  await page.waitForURL(/demo-.*\/app#\/requests$/);
+  await page.waitForTimeout(900);
+  await expect(page.getByRole("dialog")).toHaveCount(0); // a new page doesn't start one either
+
+  await page.getByRole("link", { name: "Statistics" }).click();
+  await page.getByRole("button", { name: /What's this page/ }).click();
+  await expect(page.getByRole("dialog")).toContainText("What the work added up to");
+  for (let i = 0; i < 3; i++) await page.getByRole("button", { name: "Next" }).click();
   await expect(page.getByRole("dialog")).toContainText("See where the numbers come from");
   await expect(page.locator(".tour-ring")).toBeVisible();
-  await page.getByRole("link", { name: "Leads" }).click(); // doing the outlined thing
-  await expect(page.getByRole("dialog")).toContainText("Where the numbers start"); // that page's own tour
+  await page.getByRole("link", { name: "Requests" }).first().click(); // doing the outlined thing
+  await expect(page.getByRole("heading", { name: "Requests" })).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0); // the tour ends; this page's starts only on request
 
-  // Nothing is blocked: the visitor can go anywhere mid-tour
-  await page.getByRole("link", { name: "Estimates" }).click();
-  await expect(page.getByRole("dialog")).toContainText("Every quote and where it stands");
-  await page.getByRole("button", { name: "Close the walkthrough" }).click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-
-  // Seen once: coming back doesn't pop it up again, but the button replays it from the start
-  await page.getByRole("link", { name: "Leads" }).click();
-  await expect(page.getByRole("button", { name: /What's this page/ })).toBeVisible();
-  await page.waitForTimeout(900);
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  // Nothing is blocked mid-tour, and Escape closes it
   await page.getByRole("button", { name: /What's this page/ }).click();
   await expect(page.getByRole("dialog")).toContainText("1 of 3");
+  await page.getByRole("link", { name: "Estimates" }).click();
+  await expect(page.getByRole("heading", { name: "Estimates" })).toBeVisible();
+  await page.getByRole("button", { name: /What's this page/ }).click();
+  await expect(page.getByRole("dialog")).toContainText("Every quote and where it stands");
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });

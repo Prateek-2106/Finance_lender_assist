@@ -30,15 +30,15 @@ export function RiskBreakdown({ a, showEngineDecision = true }: { a: Assessment;
       )}
       <details>
         <summary>All 8 measures from the bank statement</summary>
-        <table style={{ marginTop: "0.5rem" }}>
+        <table className="cards" style={{ marginTop: "0.5rem" }}>
           <thead><tr><th>Id</th><th>Measure</th><th className="num">Value</th><th className="num">Points</th></tr></thead>
           <tbody>
             {a.metrics.map((m) => (
               <tr key={m.id}>
-                <td>{m.id}</td>
-                <td>{m.label}</td>
-                <td className="num">{m.display}</td>
-                <td className="num">{pts.get(m.id)!.points.toFixed(1)} / {pts.get(m.id)!.weight}</td>
+                <td><strong>{m.id}</strong></td>
+                <td data-label="Measure">{m.label}</td>
+                <td className="num" data-label="Value">{m.display}</td>
+                <td className="num" data-label="Points">{pts.get(m.id)!.points.toFixed(1)} / {pts.get(m.id)!.weight}</td>
               </tr>
             ))}
           </tbody>

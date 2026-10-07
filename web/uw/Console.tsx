@@ -59,7 +59,7 @@ export function Console() {
           </aside>
         )}
         <Queue selected={parts[1]} go={go} />
-        <Guide page="underwriting" auto={demoOnly} />
+        <Guide page="underwriting" />
       </main>
     </div>
   );
@@ -105,14 +105,14 @@ function Queue({ selected, go }: { selected?: string; go: (p: string) => void })
   useEffect(() => void reload(), [reload]);
   if (!q) return <ErrorText error={error} />;
   const table = (rows: Row[], pending: boolean) => (
-    <table>
+    <table className="cards">
       <thead><tr><th>Business</th><th className="num">Asked for</th><th>{pending ? "Waiting since" : "Decision"}</th></tr></thead>
       <tbody>
         {rows.map((r) => (
           <tr key={r.id} className={`clickable${r.id === selected ? " selected" : ""}`} onClick={() => go(`app/${r.id}`)}>
-            <td>{r.business}{mine(r) && <span className="badge">Yours</span>}<div className="quiet small">{r.industry}{r.engine ? `, band ${r.engine.band}, ${r.engine.score}` : ""}</div></td>
-            <td className="num">{dollars(r.amountRequestedCents)}</td>
-            <td className="small">
+            <td data-label="Business">{r.business}{mine(r) && <span className="badge">Yours</span>}<div className="quiet small">{r.industry}{r.engine ? `, band ${r.engine.band}, ${r.engine.score}` : ""}</div></td>
+            <td className="num" data-label="Asked for">{dollars(r.amountRequestedCents)}</td>
+            <td className="small" data-label={pending ? "Waiting since" : "Decision"}>
               {pending ? day(r.waitingSince!) : (
                 <>
                   <Status value={OUTCOME[r.decision!.outcome]!} />

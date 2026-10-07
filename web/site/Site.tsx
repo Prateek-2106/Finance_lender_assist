@@ -80,7 +80,7 @@ export function Site() {
           </div>
         </form>
       )}
-      <Guide page="site" auto={!!site.demo} />
+      <Guide page="site" />
     </div>
   );
 }

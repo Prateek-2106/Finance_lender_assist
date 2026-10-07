@@ -3,22 +3,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { TOURS, type PageId, type Step } from "./steps";
 
-const SEEN = (page: PageId) => `vendorstreet.tour.seen.${page}`;
-const seen = (page: PageId) => {
-  try {
-    return localStorage.getItem(SEEN(page)) === "1";
-  } catch {
-    return true; // storage blocked: don't keep popping up
-  }
-};
-const markSeen = (page: PageId) => {
-  try {
-    localStorage.setItem(SEEN(page), "1");
-  } catch {
-    /* ignore */
-  }
-};
-
 /** Elements tagged data-tour="a b" match targets "a" and "b". The first visible one wins. */
 function find(target: string | undefined): HTMLElement | null {
   if (!target) return null;
@@ -30,10 +14,10 @@ function find(target: string | undefined): HTMLElement | null {
 }
 
 /**
- * The "What's this page?" button, and the walkthrough it starts.
- * `auto`: start by itself the first time someone sees this page (demo businesses, the homepage).
+ * The "What's this page?" button, and the walkthrough it starts. It never opens by itself:
+ * only when someone asks for it.
  */
-export function Guide({ page, auto = false }: { page: PageId; auto?: boolean }) {
+export function Guide({ page }: { page: PageId }) {
   const steps = TOURS[page];
   const [i, setI] = useState<number | null>(null);
   const [rect, setRect] = useState<DOMRect | null>(null);
@@ -41,21 +25,10 @@ export function Guide({ page, auto = false }: { page: PageId; auto?: boolean }) 
   const step: Step | undefined = i === null ? undefined : steps[i];
 
   const close = useCallback(() => {
-    markSeen(page);
     setI(null);
     setRect(null);
-  }, [page]);
-  const next = useCallback(() => setI((n) => (n === null ? null : n + 1 < steps.length ? n + 1 : (markSeen(page), null))), [page, steps.length]);
-
-  // Auto-start once per page, after the page has had a moment to load its data
-  useEffect(() => {
-    if (!auto || seen(page)) return;
-    const t = setTimeout(() => {
-      markSeen(page); // shown once: leaving mid-tour doesn't make it pop up again
-      setI(0);
-    }, 700);
-    return () => clearTimeout(t);
-  }, [auto, page]);
+  }, []);
+  const next = useCallback(() => setI((n) => (n === null ? null : n + 1 < steps.length ? n + 1 : null)), [steps.length]);
 
   // Follow the target as data loads, the page scrolls or the layout changes
   useLayoutEffect(() => {
@@ -100,7 +73,7 @@ export function Guide({ page, auto = false }: { page: PageId; auto?: boolean }) 
   if (!step)
     return (
       <button className="tour-launch" onClick={() => { scrolledTo.current = null; setI(0); }} aria-label="What's this page? Start the walkthrough">
-        <span aria-hidden="true">?</span> What's this page?
+        <span aria-hidden="true">?</span> <span className="label">What's this page?</span>
       </button>
     );
 

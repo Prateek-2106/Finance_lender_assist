@@ -2,30 +2,37 @@ import { useEffect, useState } from "react";
 import { api, day, session } from "../api";
 import { ErrorText } from "../ui/bits";
 import { useHash } from "./useHash";
-import { Leads } from "./Leads";
+import { Requests } from "./Requests";
 import { Estimates } from "./Estimates";
 import { Funding } from "./Funding";
-import { Insights } from "./Insights";
+import { Statistics } from "./Statistics";
 import { PriceList } from "./PriceList";
 import { Guide } from "../tour/Tour";
 import { apexUrl } from "../account/Account";
 import type { PageId } from "../tour/steps";
 
+// The order is the order of the work: what came in, how it's going, quoting, your prices, then funding.
 const SECTIONS = [
-  { id: "leads", name: "Leads" },
+  { id: "requests", name: "Requests" },
+  { id: "statistics", name: "Statistics" },
   { id: "estimates", name: "Estimates" },
   { id: "prices", name: "Price list" },
   { id: "funding", name: "Funding" },
-  { id: "insights", name: "Insights" },
 ];
+/** Old addresses (emails already sent link to them) keep working. */
+const RENAMED: Record<string, string> = { leads: "requests", insights: "statistics" };
 
 export function Dashboard() {
   const [site, setSite] = useState<{ name: string } | null>(null);
   // Signed in by API key (kept in the browser) or by account (an HttpOnly cookie we can't see, so we ask)
   const [signedIn, setSignedIn] = useState<boolean | null>(session.get() ? true : null);
-  const [demo, setDemo] = useState<boolean | undefined>(undefined); // known once settings load
   const [parts, go] = useHash();
-  const section = SECTIONS.some((s) => s.id === parts[0]) ? parts[0]! : "leads";
+  const renamed = parts[0] && RENAMED[parts[0]];
+  useEffect(() => {
+    if (renamed) history.replaceState(null, "", `#/${[renamed, ...parts.slice(1)].join("/")}`);
+  }, [renamed]);
+  const first = renamed || parts[0];
+  const section = SECTIONS.some((s) => s.id === first) ? first! : "requests";
 
   useEffect(() => {
     if (signedIn === null) api("/settings").then(() => setSignedIn(true), () => setSignedIn(false));
@@ -61,13 +68,13 @@ export function Dashboard() {
         </button>
       </aside>
       <main>
-        <DemoBanner onDemo={setDemo} />
-        {section === "leads" && <Leads go={go} />}
+        <DemoBanner />
+        {section === "requests" && <Requests go={go} />}
         {section === "estimates" && <Estimates selected={parts[1]} go={go} />}
         {section === "funding" && <Funding selected={parts[1]} go={go} />}
-        {section === "insights" && <Insights />}
+        {section === "statistics" && <Statistics view={parts.slice(1)} go={go} />}
         {section === "prices" && <PriceList />}
-        {demo !== undefined && <Guide key={section} page={section as PageId} auto={demo} />}
+        <Guide key={section} page={section as PageId} />
       </main>
     </div>
   );
@@ -112,18 +119,18 @@ function SignIn({ name, onDone }: { name?: string; onDone: () => void }) {
 }
 
 /** Demo businesses say so on every screen, and point the visitor at the other side of the product. */
-function DemoBanner({ onDemo }: { onDemo: (isDemo: boolean) => void }) {
+function DemoBanner() {
   const [demo, setDemo] = useState<{ expiresAt: string } | null>(null);
   const [uwKey, setUwKey] = useState<string | null>(null);
   useEffect(() => {
-    api<{ settings: { demo: { expiresAt: string } | null } }>("/settings").then((r) => { setDemo(r.settings.demo); onDemo(!!r.settings.demo); }, () => onDemo(false));
+    api<{ settings: { demo: { expiresAt: string } | null } }>("/settings").then((r) => setDemo(r.settings.demo), () => {});
     api<{ platform: { demo: { underwriterKey: string | null } | null } }>("/platform").then((r) => setUwKey(r.platform.demo?.underwriterKey ?? null), () => {});
   }, []);
   if (!demo) return null;
   return (
     <aside className="demo-banner" aria-label="Demo business" data-tour="demo-banner">
       <p>
-        <strong>Demo business.</strong> Everyone and everything here is made up. Emails are kept under Insights, never sent. Expires {day(demo.expiresAt)}.
+        <strong>Demo business.</strong> Everyone and everything here is made up. Emails are kept under Statistics, never sent. Expires {day(demo.expiresAt)}.
       </p>
       {uwKey && (
         <a className="button secondary small" href={`/underwriting#key=${uwKey}`} data-tour="uw-link">

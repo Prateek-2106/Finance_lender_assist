@@ -36,16 +36,46 @@ const withNext = (path: string, extra = "") => {
   const q = [extra, nextParam()].filter(Boolean).join("&");
   return q ? `${path}?${q}` : path;
 };
-const goNext = () => location.replace(new URLSearchParams(location.search).get("next") ?? "/account");
+/**
+ * Where to go after signing in: a page on this site or one of its business subdomains, nothing else
+ * (an attacker's ?next=https://evil.example would otherwise get a free redirect from our sign-in page).
+ */
+export function safeNext(next: string | null, here: Location | URL = location): string {
+  if (!next) return "/account";
+  if (next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\")) return next;
+  try {
+    const u = new URL(next);
+    const host = here.hostname.toLowerCase();
+    const ok = (u.protocol === "https:" || u.protocol === "http:") && (u.hostname === host || u.hostname.endsWith(`.${host}`));
+    return ok ? u.href : "/account";
+  } catch {
+    return "/account";
+  }
+}
+const goNext = () => location.replace(safeNext(new URLSearchParams(location.search).get("next")));
 
-function PasswordField({ name = "password", label = "Password", autoComplete, help }: { name?: string; label?: string; autoComplete: string; help?: string }) {
+/** Phones capitalise and "correct" text fields; never for emails, passwords or codes. */
+const plain = { autoCapitalize: "none", autoCorrect: "off", spellCheck: false } as const;
+
+function PasswordField({ name = "password", label = "Password", autoComplete, help }: { name?: string; label?: string; autoComplete: "current-password" | "new-password"; help?: string }) {
   const [show, setShow] = useState(false);
   const id = useId();
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
       <span className="pw">
-        <input id={id} name={name} type={show ? "text" : "password"} required minLength={10} maxLength={200} autoComplete={autoComplete} aria-describedby={help ? `${id}-help` : undefined} />
+        <input
+          id={id}
+          name={name}
+          type={show ? "text" : "password"}
+          required
+          // Length rules only apply to new passwords: an old one is checked by the server, never second-guessed here
+          {...(autoComplete === "new-password" ? { minLength: 10 } : {})}
+          maxLength={200}
+          autoComplete={autoComplete}
+          {...plain}
+          aria-describedby={help ? `${id}-help` : undefined}
+        />
         <button type="button" className="secondary small" onClick={() => setShow((x) => !x)} aria-label={show ? "Hide password" : "Show password"}>{show ? "Hide" : "Show"}</button>
       </span>
       {help && <span id={`${id}-help`} className="small quiet">{help}</span>}
@@ -78,8 +108,9 @@ export function SignInPage() {
       await api("/auth/login", { method: "POST", json: { email, password: String(f.get("password")) } });
       goNext();
     } catch (err) {
-      // Right password but the email isn't confirmed yet: we just sent a code
-      if (err instanceof ApiError && err.status === 403 && /Confirm your email/.test(err.message)) location.assign(withNext("/verify", `email=${encodeURIComponent(email)}`));
+      // Right password but the email isn't confirmed yet: finish that, then carry on to `next`
+      if (err instanceof ApiError && err.status === 403 && err.body?.needsVerification)
+        location.assign(withNext("/verify", `email=${encodeURIComponent(email)}&from=signin&sent=${err.body.codeSent === false ? 0 : 1}`));
       else throw err;
     }
   });
@@ -88,7 +119,7 @@ export function SignInPage() {
       <form className="stack" onSubmit={onSubmit} aria-label="Sign in">
         <label>
           Email
-          <input name="email" type="email" required autoComplete="username" autoFocus />
+          <input name="email" type="email" required autoComplete="username" autoFocus {...plain} />
         </label>
         <PasswordField autoComplete="current-password" />
         <ErrorText error={error} />
@@ -114,7 +145,7 @@ export function SignUpPage() {
       <form className="stack" onSubmit={onSubmit} aria-label="Create an account">
         <label>
           Email
-          <input name="email" type="email" required autoComplete="email" autoFocus />
+          <input name="email" type="email" required autoComplete="email" autoFocus {...plain} />
         </label>
         <PasswordField autoComplete="new-password" help="At least 10 characters. A short phrase is easy to remember and hard to guess." />
         <ErrorText error={error} />
@@ -127,7 +158,9 @@ export function SignUpPage() {
 
 /** "Enter the code we emailed you" after sign-up (or a sign-in before confirming). */
 export function VerifyPage() {
-  const email = new URLSearchParams(location.search).get("email") ?? "";
+  const q = new URLSearchParams(location.search);
+  const email = q.get("email") ?? "";
+  const fromSignIn = q.get("from") === "signin";
   const [resent, setResent] = useState(false);
   const { busy, error, setError, onSubmit } = useSubmit(async (f) => {
     await api("/auth/verify-email", { method: "POST", json: { email, code: String(f.get("code")).trim() } });
@@ -145,11 +178,19 @@ export function VerifyPage() {
   if (!email) return <Frame title="Confirm your email"><p><a href="/signup">Start again</a></p></Frame>;
   return (
     <Frame title="Confirm your email">
-      <p>We sent a 6-digit code to <strong>{email}</strong>. It expires in 15 minutes.</p>
+      {fromSignIn && (
+        <p className="notice" role="status">
+          Your password is right. This email isn't confirmed yet, so enter the code to finish signing in.
+        </p>
+      )}
+      <p>
+        {fromSignIn && q.get("sent") === "0" ? "Use the latest 6-digit code we sent to " : "We sent a 6-digit code to "}
+        <strong>{email}</strong>. Codes expire after 15 minutes.
+      </p>
       <form className="stack" onSubmit={onSubmit} aria-label="Confirm your email">
         <label>
           Code
-          <input name="code" required inputMode="numeric" autoComplete="one-time-code" pattern="\d{6}" maxLength={6} autoFocus className="code-input" />
+          <input name="code" required inputMode="numeric" autoComplete="one-time-code" pattern="\d{6}" maxLength={6} autoFocus className="code-input" {...plain} />
         </label>
         <ErrorText error={error} />
         <div><button disabled={busy}>{busy ? "Checking…" : "Confirm"}</button></div>
@@ -179,7 +220,7 @@ export function ForgotPage() {
         <form className="stack" onSubmit={ask.onSubmit} aria-label="Reset your password">
           <label>
             Email
-            <input name="email" type="email" required autoComplete="username" autoFocus />
+            <input name="email" type="email" required autoComplete="username" autoFocus {...plain} />
           </label>
           <ErrorText error={ask.error} />
           <div><button disabled={ask.busy}>{ask.busy ? "Sending…" : "Email me a code"}</button></div>
@@ -193,7 +234,7 @@ export function ForgotPage() {
       <form className="stack" onSubmit={reset.onSubmit} aria-label="Choose a new password">
         <label>
           Code
-          <input name="code" required inputMode="numeric" autoComplete="one-time-code" pattern="\d{6}" maxLength={6} autoFocus className="code-input" />
+          <input name="code" required inputMode="numeric" autoComplete="one-time-code" pattern="\d{6}" maxLength={6} autoFocus className="code-input" {...plain} />
         </label>
         <PasswordField label="New password" autoComplete="new-password" help="At least 10 characters. This signs you out on your other devices." />
         <ErrorText error={reset.error} />

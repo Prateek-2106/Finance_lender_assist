@@ -64,7 +64,7 @@ export const templates = {
   leadReceivedOwner(t: Tenant, lead: Lead, dashboardUrl: string): Rendered {
     const contact = [lead.phone, lead.email].filter(Boolean).join(", ");
     const lines = [`New ${lead.source === "sms" ? "text message" : "quote request"} from ${lead.name} (${contact}):`, `"${lead.message}"`, `Open it in your dashboard: ${dashboardUrl}`];
-    return { subject: `New lead: ${lead.name}`, text: lines.join("\n\n"), html: wrap(t.name, lines.map(p).join("")) };
+    return { subject: `New request: ${lead.name}`, text: lines.join("\n\n"), html: wrap(t.name, lines.map(p).join("")) };
   },
   estimateSent(t: Tenant, e: Estimate): Rendered {
     const items = itemsTable(e);

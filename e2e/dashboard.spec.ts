@@ -21,7 +21,7 @@ test("a customer requests a quote on the business's website", async ({ page }) =
   await page.getByRole("button", { name: "Request a quote" }).click();
   await expect(page.getByRole("status")).toContainText("we got your request");
   await expect.poll(async () => (await emails(page)).map((e) => e.subject)).toEqual(
-    expect.arrayContaining(["We got your request - Joe's Plumbing", "New lead: Ann Lee"]),
+    expect.arrayContaining(["We got your request - Joe's Plumbing", "New request: Ann Lee"]),
   );
 });
 
@@ -122,11 +122,11 @@ test("an underwriter reviews the case, checks the AI memo, and approves with a n
   await expect.poll(async () => (await emails(page)).filter((e) => e.to === "joe@joesplumbing.test").map((e) => e.subject)).toContain("You're approved - $60,000 request");
 });
 
-test("insights show what happened after payment, and every email sent", async ({ page }) => {
-  await signIn(page, "/app#/insights");
+test("statistics show what happened after payment, and every email sent", async ({ page }) => {
+  await signIn(page, "/app#/statistics");
   const pipeline = page.getByRole("region", { name: "Pipeline" });
   await expect(pipeline.getByText("Paid", { exact: true })).toBeVisible();
-  await expect(page.locator(".kpi", { hasText: "Paid to you" })).toContainText("$238");
+  await expect(page.locator(".kpi", { hasText: "Gross income" })).toContainText("$219"); // $238.16 paid, less $19.16 sales tax
   const log = page.getByRole("region", { name: "Emails sent" });
   await expect(log.getByRole("row", { name: /Invoice ann@example.test Sent/ })).toBeVisible();
   await expect(log.getByRole("row", { name: /Funding: approved/ })).toBeVisible();

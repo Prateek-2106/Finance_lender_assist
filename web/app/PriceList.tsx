@@ -159,7 +159,7 @@ export function PriceList() {
         </div>
       </div>
       <p className="quiet">
-        Everything you sell, at your prices. When you press Draft estimate on a lead, the AI only picks from this list and never sets a price itself.
+        Everything you sell, at your prices. When you press Draft estimate on a request, the AI only picks from this list and never sets a price itself.
       </p>
       {importNote && <p className="small" role="status">{importNote}</p>}
 

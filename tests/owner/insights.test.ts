@@ -43,6 +43,19 @@ describe("after payment: the pipeline feeds insights", () => {
     expect(empty.conversion.leadToEstimatePercent).toBeNull();
   });
 
+  it("gross income is before sales tax; the tax collected is shown apart", async () => {
+    const { app } = makeApp();
+    const joe = await signUp(app, { name: "Joe's Plumbing", taxRateBps: 1000 });
+    const as = { Host: joe.host, Authorization: `Bearer ${joe.apiKey}` };
+    const est = (await request(app).post("/api/estimates").set(as).send({ customer: { name: "Ann", email: "ann@x.co" }, lineItems: items })).body.estimate.id;
+    for (const to of ["sent", "accepted"]) await request(app).post(`/api/estimates/${est}/transition`).set(as).send({ to });
+    const inv = (await request(app).post(`/api/estimates/${est}/invoice`).set(as)).body.invoice;
+    await request(app).post(`/api/invoices/${inv.id}/pay`).set(as);
+    const s = (await request(app).get("/api/insights").set(as)).body.insights;
+    expect(s.revenue).toMatchObject({ paidCents: 14190, grossCents: 12900, taxCollectedCents: 1290, averageJobCents: 12900 });
+    expect(s.revenue.byMonth.at(-1)).toMatchObject({ grossCents: 12900, taxCents: 1290, revenueCents: 14190, invoices: 1 });
+  });
+
   it("is owner-only", async () => {
     const { app } = makeApp();
     const joe = await signUp(app, { name: "Joe" });
