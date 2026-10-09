@@ -9,6 +9,7 @@ import { Home, type Platform } from "./home/Home";
 import { Scoring } from "./scoring/Scoring";
 import { AccountPage, ForgotPage, SignInPage, SignUpPage, VerifyPage } from "./account/Account";
 import { AdminPage } from "./admin/Admin";
+import { HealthPage } from "./admin/Health";
 
 /** "/" is the platform's homepage on the main domain, and a business's own website on its address. */
 function Root() {
@@ -25,5 +26,5 @@ function Root() {
 const at = (p: string) => location.pathname === p || location.pathname.startsWith(`${p}/`);
 if (at("/app")) takeKeyFromHash(session, "#/requests"); // a demo opens where the work starts
 if (at("/underwriting")) takeKeyFromHash(uwSession, "#/");
-const page = at("/signin") ? <SignInPage /> : at("/signup") ? <SignUpPage /> : at("/verify") ? <VerifyPage /> : at("/forgot") ? <ForgotPage /> : at("/account") ? <AccountPage /> : at("/admin") ? <AdminPage /> : at("/scoring") ? <Scoring /> : at("/underwriting") ? <Console /> : at("/app") ? <Dashboard /> : <Root />;
+const page = at("/signin") ? <SignInPage /> : at("/signup") ? <SignUpPage /> : at("/verify") ? <VerifyPage /> : at("/forgot") ? <ForgotPage /> : at("/account") ? <AccountPage /> : at("/admin/health") ? <HealthPage /> : at("/admin") ? <AdminPage /> : at("/scoring") ? <Scoring /> : at("/underwriting") ? <Console /> : at("/app") ? <Dashboard /> : <Root />;
 createRoot(document.getElementById("root")!).render(<StrictMode>{page}</StrictMode>);

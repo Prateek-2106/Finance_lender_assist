@@ -374,6 +374,9 @@ export async function createMongoRepos(db: Db): Promise<Repos> {
         await sessions.deleteMany({ userId, ...(except ? { _id: { $ne: except } } : {}) });
       },
     },
+    async ping() {
+      await db.command({ ping: 1 });
+    },
     stats: {
       async overview(since) {
         const demoIds = (await tenants.find({ "demo.expiresAt": { $exists: true } }, { projection: { _id: 1 } }).toArray()).map((t) => t._id);

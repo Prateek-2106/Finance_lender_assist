@@ -1,8 +1,8 @@
 // Watching the live site: one CloudWatch dashboard, alarms that email you, and an outside uptime check.
 //
 // The app's own metrics (requests, errors, latency, AI calls and cost, emails) come from log lines in
-// CloudWatch's Embedded Metric Format (src/telemetry/metrics.ts): 10 custom metrics, which the free
-// tier covers. 8 alarms (10 free), 1 dashboard (3 free), 1 Route 53 health check (about $0.75/month).
+// CloudWatch's Embedded Metric Format (src/telemetry/metrics.ts): 11 custom metrics (10 are free,
+// the 11th about $0.30/month). 8 alarms (10 free), 1 dashboard (3 free), 1 Route 53 health check (about $0.75/month).
 import * as cdk from "aws-cdk-lib";
 import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
 import * as cw from "aws-cdk-lib/aws-cloudwatch";
@@ -144,13 +144,15 @@ export class Monitoring extends Construct {
           graph("AI response time (ms)", [app("AiLatency", "p50", five, "p50"), app("AiLatency", "p95", five, "p95")], { leftYAxis: { min: 0 } }),
         ],
         [
-          graph("Emails", [app("EmailsSent", "Sum", five, "sent"), app("EmailsFailed", "Sum", five, "failed")], { leftYAxis: { min: 0 } }),
+          graph("Database time per request (ms)", [app("DbTime", "p50", five, "p50"), app("DbTime", "p95", five, "p95")], { leftYAxis: { min: 0 }, width: 6 }),
+          graph("Emails", [app("EmailsSent", "Sum", five, "sent"), app("EmailsFailed", "Sum", five, "failed")], { leftYAxis: { min: 0 }, width: 6 }),
           graph("Server CPU (%) and burst credits", [ec2Metric("CPUUtilization", "Average")], {
+            width: 6,
             right: [ec2Metric("CPUCreditBalance", "Average")],
             leftYAxis: { min: 0, max: 100 },
             rightYAxis: { min: 0, label: "credits" },
           }),
-          graph("CloudFront", [cdn("Requests", "Sum")], { right: [cdn("5xxErrorRate", "Average")], rightYAxis: { min: 0, label: "5xx %" } }),
+          graph("CloudFront", [cdn("Requests", "Sum")], { right: [cdn("5xxErrorRate", "Average")], rightYAxis: { min: 0, label: "5xx %" }, width: 6 }),
         ],
         [
           new cw.LogQueryWidget({

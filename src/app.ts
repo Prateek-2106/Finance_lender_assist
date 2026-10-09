@@ -21,23 +21,62 @@ import { adminRouter } from "./routes/admin"; // telemetry: platform numbers
 import { noMetrics } from "./telemetry/metrics";
 import { requestMetrics } from "./telemetry/requestMetrics";
 import { instrumentLlm } from "./telemetry/aiUsage";
+import { Health, instrumentRepos } from "./telemetry/health";
+import { instrument } from "./telemetry/external";
+import { Prometheus } from "./telemetry/prometheus";
 
 export function createApp(input: Deps) {
   const app = express();
   const metrics = input.metrics ?? noMetrics;
-  // Every model call is timed, counted and priced here, so no route can forget to.
-  const deps: Deps = { ...input, metrics, ...(input.llm ? { llm: instrumentLlm(input.llm, { metrics, repos: input.repos }) } : {}) };
+  const health = input.health ?? new Health(Date.now, input.config.metricsToken ? new Prometheus() : undefined);
+  // Every database call, model call, email and DNS lookup is timed here, so no route can forget to.
+  const repos = instrumentRepos(input.repos, health);
+  const deps: Deps = {
+    ...input,
+    repos,
+    metrics,
+    health,
+    ...instrument(health, {
+      llm: input.llm && instrumentLlm(input.llm, { metrics, repos }),
+      mailer: input.mailer,
+      dns: input.dns,
+    }),
+  };
   const notifier = new Notifier(deps.repos, deps.config, deps.mailer, metrics);
   app.locals.notifier = notifier; // tests await notifier.idle() before checking emails
   // How many proxies sit in front of us (CloudFront = 1, CloudFront + ALB = 2). A count, never `true`:
   // with `true`, req.ip is whatever the visitor writes in X-Forwarded-For, and rate limits mean nothing.
   app.set("trust proxy", deps.config.trustProxyHops ?? 0);
-  app.use(requestMetrics(metrics));
+  app.use(requestMetrics(metrics, health));
   app.use(express.json({ limit: "100kb" }));
 
+  // Liveness: the process answers. Readiness: it can also reach the database (a load balancer or
+  // Kubernetes sends traffic only when ready).
   app.get("/health", (_req, res) => {
     res.json({ ok: true });
   });
+  app.get("/ready", async (_req, res) => {
+    const started = performance.now();
+    try {
+      await Promise.race([input.repos.ping(), new Promise((_, reject) => setTimeout(() => reject(new Error("timed out")), 2000).unref())]);
+      res.json({ ok: true, databaseMs: Math.round(performance.now() - started) });
+    } catch (e) {
+      res.status(503).json({ ok: false, error: `database: ${(e as Error).message}` });
+    }
+  });
+  // Prometheus format, for a scraper holding METRICS_TOKEN. Not routed through CloudFront's secret
+  // header check on purpose: a scraper inside the network calls the server directly.
+  const metricsToken = input.config.metricsToken;
+  if (metricsToken && health.prometheus)
+    app.get("/metrics", async (req, res) => {
+      const got = req.get("authorization") ?? "";
+      const want = `Bearer ${metricsToken}`;
+      if (got.length !== want.length || !timingSafeEqual(Buffer.from(got), Buffer.from(want))) {
+        res.status(401).json({ error: "Bearer token required" });
+        return;
+      }
+      res.set("Content-Type", health.prometheus!.contentType).send(await health.prometheus!.text());
+    });
 
   // Behind CloudFront: only requests carrying CloudFront's secret header get in, so nobody can skip the CDN
   // (and its TLS) by calling the server's address directly. /health above stays open for the container check.

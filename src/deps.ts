@@ -26,6 +26,8 @@ export interface Config {
   adminEmails?: string[];
   /** Linked from /admin. */
   dashboardUrl?: string;
+  /** GET /metrics (Prometheus format) answers only with this bearer token; unset = no /metrics. */
+  metricsToken?: string;
   /** Shown on the homepage. */
   site?: { author?: string; repoUrl?: string };
 }
@@ -61,4 +63,6 @@ export interface Deps {
   mailer?: import("./notify/mailer").Mailer; // step 11: Mailpit locally, SES in production
   /** CloudWatch metrics in production; nothing by default. */
   metrics?: import("./telemetry/metrics").Metrics;
+  /** Live timings for the System health page (and /metrics). createApp makes one if not given. */
+  health?: import("./telemetry/health").Health;
 }

@@ -58,8 +58,8 @@ describe("CloudWatch metrics (EMF)", () => {
     expect(lines).toHaveLength(1);
   });
 
-  it("stays within CloudWatch's 10 free custom metrics", () => {
-    expect(Object.keys(COUNTERS).length + Object.keys(TIMINGS).length).toBeLessThanOrEqual(10);
+  it("keeps the custom metric count small (10 are free; each extra is about $0.30 a month)", () => {
+    expect(Object.keys(COUNTERS).length + Object.keys(TIMINGS).length).toBeLessThanOrEqual(11);
   });
 });
 

@@ -63,7 +63,11 @@ export function AdminPage() {
     <Frame title="Platform" wide>
       <div className="row" style={{ justifyContent: "space-between" }}>
         <p className="quiet small">Last 14 days, UTC. Demo businesses and their sample requests are left out of business and request counts.</p>
-        <a className="small" href="/account">Your businesses</a>
+        <nav className="seg" aria-label="Admin pages">
+          <a className="button small" href="/admin" aria-current="page">Platform numbers</a>
+          <a className="button secondary small" href="/admin/health">System health</a>
+          <a className="button secondary small" href="/account">Your businesses</a>
+        </nav>
       </div>
 
       <div className="kpis" data-testid="admin-kpis">

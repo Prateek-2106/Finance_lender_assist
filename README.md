@@ -296,7 +296,7 @@ Locally, emails land in Mailpit (http://localhost:8025). With `MAIL_TRANSPORT=no
 | `AiCalls`, `AiFailures`, `AiLatency`, `AiCostUsd` | every model call, priced from the token counts the API returns (`src/telemetry/aiUsage.ts`) |
 | `EmailsSent`, `EmailsFailed` | every email the platform tries to send |
 
-That's 10 custom metrics, which is CloudWatch's free tier (a test keeps it that way).
+Plus `DbTime` (time each request spent waiting on the database): 11 custom metrics, 10 of them free (a test keeps the count small).
 
 **Dashboard and alarms** (`infra/lib/monitoring.ts`): one dashboard named `VendorStreet` (traffic, latency p50/p95/p99, AI calls and spend, email, CPU and burst credits, CloudFront, uptime, and a live table of recent errors). Eight alarms email you when they fire and when they clear:
 
@@ -318,3 +318,20 @@ Turn on the emails with `npx cdk deploy -c alertEmail=you@example.com` (or set `
 ```bash
 aws ssm put-parameter --name /vendorstreet/ADMIN_EMAILS --type String --value "you@example.com"
 ```
+
+
+## System health: where the time goes
+
+`/admin/health` (admins only) is a live view of this server for the last 5, 15 or 60 minutes, refreshed every 10 seconds:
+
+- **Status:** healthy, degraded or down, with the reason: the database isn't answering, more than 1% of requests fail, p95 response time over 1.5 s, database p95 over 250 ms, or event-loop delay over 200 ms.
+- **Every route** by its pattern (`GET /api/leads/:id`, never the ids), with calls, failures, p50/p95/p99, and its **database share**: how much of each response was spent waiting on the database, and how many database operations it makes.
+- **Every database operation** (`leads.listByTenant`, `tenants.findBySubdomain`, ...): calls, failures, p50/p95/p99, slowest. `src/telemetry/health.ts` wraps the repositories once, so a new query is measured without anyone remembering to.
+- **Outside calls:** the language model, email, DNS lookups, and a live database ping.
+- **Vitals:** CPU, memory and event-loop delay (how long work waits for the CPU), sampled each minute.
+
+It's kept in memory (bounded: at most 500 timings per operation per minute) and starts over on each deploy; CloudWatch keeps the history.
+
+**Health checks:** `GET /health` answers if the process is alive; `GET /ready` also pings the database (503 if it can't), which is what a load balancer or Kubernetes uses to decide where to send traffic.
+
+**Prometheus:** set `METRICS_TOKEN` and `GET /metrics` serves the same timings as histograms (`http_request_duration_seconds`, `db_operation_duration_seconds`, `external_call_duration_seconds`) plus Node's CPU, memory, event-loop and GC metrics, for Prometheus/Grafana to scrape with that bearer token.

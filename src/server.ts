@@ -10,6 +10,8 @@ import { parseUnderwriters } from "./middleware/underwriter";
 import { hashApiKey } from "./lib/apiKey";
 import { scheduleDemoCleanup } from "./services/demoCleanup";
 import { emfMetrics, flushPeriodically } from "./telemetry/metrics";
+import { Health } from "./telemetry/health";
+import { Prometheus } from "./telemetry/prometheus";
 
 const PORT = Number(process.env.PORT ?? 3000);
 const MONGO_URL = process.env.MONGO_URL;
@@ -41,11 +43,15 @@ async function main() {
   const metrics = metricsOn ? emfMetrics() : undefined;
   if (metrics) flushPeriodically(metrics);
   const region = env.AWS_REGION ?? "us-east-1";
+  // The System health page: live timings, plus CPU, memory and event-loop delay sampled each minute
+  const health = new Health(Date.now, env.METRICS_TOKEN ? new Prometheus() : undefined);
+  health.startVitals();
   const app = createApp({
     repos,
     llm,
     mailer,
     metrics,
+    health,
     dns: new Resolver({ timeout: 5000, tries: 2 }),
     config: {
       baseDomain: process.env.BASE_DOMAIN ?? "lvh.me",
@@ -60,6 +66,7 @@ async function main() {
       ...(env.ORIGIN_SECRET ? { originSecret: env.ORIGIN_SECRET } : {}),
       production: prod,
       trustProxyHops: int(env.TRUST_PROXY_HOPS, prod ? 1 : 0),
+      ...(env.METRICS_TOKEN ? { metricsToken: env.METRICS_TOKEN } : {}),
       adminEmails: (env.ADMIN_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean),
       ...(env.DASHBOARD_URL || prod
         ? { dashboardUrl: env.DASHBOARD_URL ?? `https://${region}.console.aws.amazon.com/cloudwatch/home?region=${region}#dashboards/dashboard/VendorStreet` }

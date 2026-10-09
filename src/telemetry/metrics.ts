@@ -5,8 +5,8 @@
 // calls, no extra IAM. Counts are added up in memory and written once a minute, so a busy minute is
 // still one log line.
 //
-// Every metric shares one dimension (Service=web), so each name is exactly one custom metric. The
-// list stays at 10, which is CloudWatch's free tier.
+// Every metric shares one dimension (Service=web), so each name is exactly one custom metric: 11 of
+// them, which is CloudWatch's 10 free plus one (about $0.30 a month).
 
 export const NAMESPACE = "VendorStreet";
 export const DIMENSIONS = { Service: "web" } as const;
@@ -24,6 +24,7 @@ export const COUNTERS = {
 export const TIMINGS = {
   Latency: "Milliseconds", // every request except AI ones, which are slow by design
   AiLatency: "Milliseconds",
+  DbTime: "Milliseconds", // per request: total time spent waiting on the database
 } as const;
 export type Counter = keyof typeof COUNTERS;
 export type Timing = keyof typeof TIMINGS;

@@ -337,3 +337,28 @@ a.bar { display: block; }
   .price-table td:nth-child(6) { grid-area: remove; }
   .price-table td:nth-child(4)::after { content: "Parts OK"; font-size: var(--step--1); color: var(--ink-2); }
 }
+
+/* System health */
+.health-status { display: flex; gap: 0.9rem; align-items: flex-start; border: 1px solid var(--rule); border-left: 4px solid var(--approve); border-radius: var(--radius); padding: 0.85rem 1rem; background: var(--surface); }
+.health-status.degraded { border-left-color: var(--review); }
+.health-status.down { border-left-color: var(--decline); }
+.health-status strong { font-size: var(--step-1); }
+.health-status ul { margin: 0.25rem 0 0; padding-left: 1.1rem; }
+.health-icon { display: inline-grid; place-items: center; width: 1.8rem; height: 1.8rem; border-radius: 50%; color: #fff; font-weight: 800; background: var(--approve); flex: none; }
+.degraded .health-icon { background: var(--review); }
+.down .health-icon { background: var(--decline); }
+.health-kpis .l strong { color: var(--ink); font-weight: 600; }
+.health-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1rem; }
+.mini-chart { margin: 0; background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius); padding: 0.75rem 0.85rem 0.5rem; display: grid; gap: 0.35rem; }
+.mini-chart figcaption { display: flex; justify-content: space-between; gap: 0.5rem; font-size: var(--step--1); font-weight: 600; }
+.mini-chart-now { font-variant-numeric: tabular-nums; color: var(--ink-2); font-weight: 500; }
+.mini-chart-plot { position: relative; }
+.mini-chart svg { display: block; width: 100%; height: auto; touch-action: pan-y; }
+.mini-chart svg:focus-visible { outline: 2px solid var(--focus); }
+.mini-chart .grid { stroke: var(--rule); stroke-width: 1; }
+.mini-chart .threshold { stroke: var(--review); stroke-width: 1; }
+.mini-chart .crosshair { stroke: var(--ink-2); stroke-width: 1; }
+.mini-chart .tick { font-size: 9px; fill: var(--ink-2); font-variant-numeric: tabular-nums; }
+.mini-chart-tip { position: absolute; top: 0; transform: translateX(-50%); background: var(--ink); color: var(--paper); font-size: var(--step--1); padding: 0.2rem 0.45rem; border-radius: 4px; white-space: nowrap; pointer-events: none; }
+.health-table code { font-size: 0.85em; background: none; word-break: break-all; }
+.health-table tr.warn td:first-child { box-shadow: inset 3px 0 0 var(--review); }

@@ -159,6 +159,8 @@ export interface Repos {
   emailCodes: EmailCodeRepo;
   sessions: SessionRepo;
   stats: StatsRepo;
+  /** Is the database answering? Throws if not (used by /ready and the health page). */
+  ping(): Promise<void>;
   /** Deletes a business and everything it owns (demo cleanup). */
   purgeTenant(tenantId: Id): Promise<void>;
 }

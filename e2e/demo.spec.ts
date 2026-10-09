@@ -15,7 +15,8 @@ test("Try it: a visitor gets a lived-in demo business and can act as the underwr
 
   // Emails are written but never sent: a new request shows up as a viewable message
   const host = new URL(page.url()).host;
-  await page.request.post(`http://${host}/api/leads`, { data: { name: "Visitor Test", email: "visitor@example.test", message: "Testing the demo" } });
+  // Straight to the server with the business's Host header: no DNS needed for the random demo subdomain
+  await page.request.post("http://localhost:3100/api/leads", { headers: { Host: host }, data: { name: "Visitor Test", email: "visitor@example.test", message: "Testing the demo" } });
   await page.goto(`http://${host}/app#/statistics`);
   await page.getByRole("button", { name: /View email: New request: Visitor Test/ }).click();
   await expect(page.getByRole("dialog", { name: "Email preview" })).toContainText("not sent");

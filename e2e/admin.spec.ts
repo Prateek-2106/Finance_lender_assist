@@ -45,4 +45,19 @@ test("the platform owner sees sign-ups, demos and AI spend on /admin; nobody els
   await expect(today.locator("td").nth(2)).not.toHaveText("0"); // demos today
   await expect(page.getByRole("region", { name: "AI usage" })).toContainText("scripted/e2e");
   await expect(page.getByRole("link", { name: "Open the CloudWatch dashboard" })).toHaveAttribute("href", /cloudwatch.*VendorStreet/);
+
+  // System health: live timings for this server
+  await page.getByRole("link", { name: "System health" }).click();
+  await page.waitForURL(`${APEX}/admin/health`);
+  await expect(page.getByTestId("health-status")).toContainText("Healthy");
+  await expect(page.getByTestId("health-kpis")).toContainText("Response time, p95");
+  await page.getByRole("button", { name: /Show all/ }).first().click();
+  await expect(page.getByTestId("health-routes")).toContainText("GET /api/admin/overview");
+  await expect(page.getByTestId("health-routes")).toContainText("POST /api/auth/login");
+  await expect(page.getByTestId("health-routes")).not.toContainText("POST /login");
+  await expect(page.getByTestId("health-db")).toContainText("sessions.find");
+  await expect(page.getByTestId("health-external")).toContainText("Database ping");
+  await expect(page.getByRole("img", { name: /Requests per minute/ })).toBeVisible();
+  await page.getByRole("button", { name: "1 hour" }).click();
+  await expect(page.getByText("the last 60 minutes")).toBeVisible();
 });

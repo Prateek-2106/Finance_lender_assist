@@ -323,6 +323,7 @@ export function createMemoryRepos(): Repos {
         for (const [k, s] of sessions) if (s.userId === userId && k !== except) sessions.delete(k);
       },
     },
+    async ping() {},
     stats: {
       async overview(since) {
         const day = (d: Date) => new Date(d).toISOString().slice(0, 10);
